@@ -38,6 +38,56 @@ if (process.env.ALLOWED_SUBNET) app.use(lanOnly);
 // Health check endpoint (Railway uses this)
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }));
 
+// TEMPORARY seed endpoint — xoá sau khi dùng
+app.post('/api/init-seed', async (req, res) => {
+  if (req.headers['x-seed-key'] !== 'seed-2026') return res.status(403).json({ message: 'Forbidden' });
+  try {
+    const bcrypt = require('bcryptjs');
+    const User = require('./models/User');
+    const DanhMuc = require('./models/DanhMuc');
+    const DonViTinh = require('./models/DonViTinh');
+
+    const results = {};
+
+    // Admin
+    const exists = await User.findOne({ username: 'admin' });
+    if (!exists) {
+      await User.create({ username: 'admin', password: 'Admin@123', hoTen: 'Quản trị viên', role: 'admin' });
+      results.admin = 'created';
+    } else {
+      const hash = await bcrypt.hash('Admin@123', 10);
+      await User.collection.updateOne({ username: 'admin' }, { $set: { password: hash } });
+      results.admin = 'password reset';
+    }
+
+    // DanhMuc
+    const danhMucs = [
+      { maDanhMuc: 'DM001', tenDanhMuc: 'Sữa' },
+      { maDanhMuc: 'DM002', tenDanhMuc: 'Thuốc' },
+      { maDanhMuc: 'DM003', tenDanhMuc: 'Gia vị' },
+      { maDanhMuc: 'DM004', tenDanhMuc: 'Bánh kẹo' },
+      { maDanhMuc: 'DM005', tenDanhMuc: 'Đồ uống' },
+      { maDanhMuc: 'DM006', tenDanhMuc: 'Hoá phẩm' },
+      { maDanhMuc: 'DM007', tenDanhMuc: 'Mì Tôm' },
+    ];
+    for (const d of danhMucs) {
+      await DanhMuc.updateOne({ maDanhMuc: d.maDanhMuc }, { $setOnInsert: d }, { upsert: true });
+    }
+    results.danhMuc = danhMucs.length + ' upserted';
+
+    // DonViTinh
+    const donViTinhs = ['chai','gói','cây','hộp','thùng','lốc','vỉ','lon','kg','cái'];
+    for (const t of donViTinhs) {
+      await DonViTinh.updateOne({ tenDonVi: t }, { $setOnInsert: { tenDonVi: t } }, { upsert: true });
+    }
+    results.donViTinh = donViTinhs.length + ' upserted';
+
+    res.json({ message: 'Seed OK', results });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // API Routes
 app.use('/api/auth',         authRoutes);
 app.use('/api/hang-hoa',     hangHoaRoutes);
