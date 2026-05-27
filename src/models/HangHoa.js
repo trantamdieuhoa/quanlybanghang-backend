@@ -33,13 +33,12 @@ const hangHoaSchema = new mongoose.Schema({
   ngayCapNhat: { type: Date, default: Date.now },
 }, { timestamps: true });
 
-// Auto-generate maHangHoa nếu không có
-hangHoaSchema.pre('save', function (next) {
+// Auto-generate maHangHoa trước khi validate (phải dùng pre validate, không phải pre save)
+hangHoaSchema.pre('validate', function (next) {
   if (!this.maHangHoa) {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     const rand = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
     this.maHangHoa = `HH${rand}`;
-  
   }
   next();
 });
