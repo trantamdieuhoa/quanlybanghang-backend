@@ -1,0 +1,10 @@
+const router = require('express').Router();
+const { protect } = require('../middleware/auth');
+const c = require('../controllers/phieuNhapController');
+router.use(protect);
+router.get('/',    c.getAll);
+router.get('/:id', c.getOne);
+router.post('/',   c.create);
+router.put('/:id', c.update);
+router.post('/:id/payment', c.addPayment);
+module.exports = router;

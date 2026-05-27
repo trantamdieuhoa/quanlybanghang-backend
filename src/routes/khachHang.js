@@ -1,0 +1,12 @@
+const router = require('express').Router();
+const { protect } = require('../middleware/auth');
+const c = require('../controllers/khachHangController');
+router.use(protect);
+router.get('/',                  c.getAll);
+router.get('/:id/hoa-don',       c.getHoaDon);
+router.get('/:id/tra-hang',      c.getTraHang);
+router.get('/:id',               c.getOne);
+router.post('/',                 c.create);
+router.put('/:id',               c.update);
+router.delete('/:id',            c.remove);
+module.exports = router;
