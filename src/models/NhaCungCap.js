@@ -15,8 +15,8 @@ const nhaCungCapSchema = new mongoose.Schema({
   trangThai:   { type: String, enum: ['Hoạt động','Ngừng'], default: 'Hoạt động' },
 }, { timestamps: true });
 
-// Đồng bộ alias
-nhaCungCapSchema.pre('save', function(next) {
+// Đồng bộ alias trước khi validate
+nhaCungCapSchema.pre('validate', function(next) {
   if (!this.maNhaCungCap && this.maNCC) this.maNhaCungCap = this.maNCC;
   if (!this.maNCC && this.maNhaCungCap) this.maNCC = this.maNhaCungCap;
   if (!this.tenNhaCungCap && this.tenNCC) this.tenNhaCungCap = this.tenNCC;
