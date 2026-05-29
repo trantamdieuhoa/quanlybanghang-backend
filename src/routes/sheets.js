@@ -18,6 +18,7 @@ router.post('/import', protect, adminOnly, async (req, res) => {
     const result = await sheetsSync.importFromSheets();
     res.json({ message: 'Import hoàn tất', result });
   } catch (err) {
+    console.error('[Sheets Import] Error:', err.message, err.stack);
     res.status(500).json({ message: err.message });
   }
 });
