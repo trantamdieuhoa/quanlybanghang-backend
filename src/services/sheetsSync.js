@@ -117,27 +117,31 @@ const readSheet = async (sheets, sheetId, sheetName) => {
 
 const importHangHoa = async (sheets, sheetId) => {
   const rows = await readSheet(sheets, sheetId, 'HangHoa');
-  let count = 0;
+  const validIds = [];
   for (const row of rows) {
     const [maHangHoa, tenHangHoa, donViNhoNhat, danhMuc, nhaCungCap, ghiChu, trangThai, , giaVonRaw] = row;
     if (!maHangHoa || !tenHangHoa) continue;
     await HangHoa.findOneAndUpdate(
       { maHangHoa },
       {
-        tenHangHoa, donViNhoNhat, danhMuc, ghiChu,
+        tenHangHoa, donViNhoNhat, danhMuc, nhaCungCap, ghiChu,
         trangThai: trangThai || 'Hoạt động',
-        giaVon: fromSheets(giaVonRaw),   // nghìn đồng → đồng
+        giaVon: fromSheets(giaVonRaw),
       },
       { upsert: true, new: true }
     );
-    count++;
+    validIds.push(maHangHoa);
   }
-  return count;
+  // Xóa các records không có trong Sheets
+  if (validIds.length > 0) {
+    await HangHoa.deleteMany({ maHangHoa: { $nin: validIds } });
+  }
+  return validIds.length;
 };
 
 const importBangGia = async (sheets, sheetId) => {
   const rows = await readSheet(sheets, sheetId, 'BangGiaChiTiet');
-  let count = 0;
+  const validIds = [];
   for (const row of rows) {
     const [maGia, maHangHoa, tenHangHoa, quyCachBan, soLuongQuyDoi, donViQuyCach, giaBanRaw, , ghiChu, trangThai] = row;
     if (!maGia || !maHangHoa) continue;
@@ -146,19 +150,23 @@ const importBangGia = async (sheets, sheetId) => {
       {
         maHangHoa, tenHangHoa, quyCachBan, donViQuyCach, ghiChu,
         soLuongQuyDoi: Number(soLuongQuyDoi) || 1,
-        giaBan: fromSheets(giaBanRaw),    // nghìn đồng → đồng (7 → 7000)
+        giaBan: fromSheets(giaBanRaw),
         trangThai: trangThai || 'Hoạt động',
       },
       { upsert: true, new: true }
     );
-    count++;
+    validIds.push(maGia);
   }
-  return count;
+  // Xóa các records không có trong Sheets
+  if (validIds.length > 0) {
+    await BangGia.deleteMany({ maGia: { $nin: validIds } });
+  }
+  return validIds.length;
 };
 
 const importDanhMuc = async (sheets, sheetId) => {
   const rows = await readSheet(sheets, sheetId, 'DanhMuc');
-  let count = 0;
+  const validIds = [];
   for (const row of rows) {
     const [maDanhMuc, tenDanhMuc, moTa] = row;
     if (!maDanhMuc || !tenDanhMuc) continue;
@@ -167,25 +175,33 @@ const importDanhMuc = async (sheets, sheetId) => {
       { tenDanhMuc, moTa: moTa || '' },
       { upsert: true }
     );
-    count++;
+    validIds.push(maDanhMuc);
   }
-  return count;
+  // Xóa các records không có trong Sheets
+  if (validIds.length > 0) {
+    await DanhMuc.deleteMany({ maDanhMuc: { $nin: validIds } });
+  }
+  return validIds.length;
 };
 
 const importDonViTinh = async (sheets, sheetId) => {
   const rows = await readSheet(sheets, sheetId, 'DonViTinh');
-  let count = 0;
+  const validNames = [];
   for (const row of rows) {
     const [tenDonVi, ghiChu] = row;
     if (!tenDonVi) continue;
     await DonViTinh.findOneAndUpdate(
       { tenDonVi },
-      { ghiChu: ghiChu || '' },
+      { ghiChu: ghiChu || '', trangThai: 'Hoạt động' },
       { upsert: true }
     );
-    count++;
+    validNames.push(tenDonVi);
   }
-  return count;
+  // Xóa các records không có trong Sheets
+  if (validNames.length > 0) {
+    await DonViTinh.deleteMany({ tenDonVi: { $nin: validNames } });
+  }
+  return validNames.length;
 };
 
 // ─── Public API ────────────────────────────────────────────────────────────────
@@ -222,11 +238,14 @@ const startAutoSync = () => {
   const interval = Number(process.env.SYNC_INTERVAL_MINUTES) || 30;
   const cronExpr = `*/${interval} * * * *`;
   cron.schedule(cronExpr, async () => {
-    console.log(`[Sheets Sync] Auto sync at ${new Date().toISOString()}`);
-    try { await syncAll(); }
-    catch (err) { console.error('[Sheets Sync] Error:', err.message); }
+    console.log(`[Sheets Import] Auto import from Sheets at ${new Date().toISOString()}`);
+    try {
+      const result = await importFromSheets();
+      console.log('[Sheets Import] Done:', result);
+    }
+    catch (err) { console.error('[Sheets Import] Error:', err.message); }
   });
-  console.log(`[Sheets Sync] Auto sync every ${interval} minutes`);
+  console.log(`[Sheets Import] Auto import from Sheets every ${interval} minutes`);
 };
 
 module.exports = { syncAll, importFromSheets, startAutoSync };
