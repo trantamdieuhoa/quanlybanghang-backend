@@ -5,9 +5,8 @@ const HangHoa = require('../models/HangHoa');
 exports.getAll = async (req, res) => {
   try {
     const { maHangHoa, trangThai } = req.query;
-    const filter = {};
+    const filter = { trangThai: trangThai || 'Hoạt động' };
     if (maHangHoa) filter.maHangHoa = maHangHoa;
-    if (trangThai) filter.trangThai = trangThai;
 
     const data = await BangGia.find(filter).sort({ maHangHoa: 1, soLuongQuyDoi: 1 });
     res.json(data);
