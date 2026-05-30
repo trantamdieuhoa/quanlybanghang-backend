@@ -29,17 +29,20 @@ exports.dashboard = async (req, res) => {
       ]),
     ]);
 
-    const topBangGia = await BangGia.aggregate([
-      { $match: { trangThai: HD } },
-      {
-        $group: {
-          _id: '$maHangHoa',
-          tenHangHoa: { $first: '$tenHangHoa' },
-          soQuyCach: { $sum: 1 },
-        },
-      },
-      { $sort: { soQuyCach: -1 } },
-      { $limit: 10 },
+    const [topBangGia, hangSapHet] = await Promise.all([
+      BangGia.aggregate([
+        { $match: { trangThai: HD } },
+        { $group: { _id: '$maHangHoa', tenHangHoa: { $first: '$tenHangHoa' }, soQuyCach: { $sum: 1 } } },
+        { $sort: { soQuyCach: -1 } },
+        { $limit: 10 },
+      ]),
+      HangHoa.find({
+        trangThai: HD,
+        $expr: { $lte: ['$tonKho', '$nguongCanhBao'] },
+      }, 'tenHangHoa danhMuc tonKho nguongCanhBao')
+        .sort({ tonKho: 1 })
+        .limit(20)
+        .lean(),
     ]);
 
     res.json({
@@ -50,10 +53,11 @@ exports.dashboard = async (req, res) => {
       tongDanhMuc,
       tongNCC,
       phanBoDanhMuc: phanBoDanhMuc.map((d) => ({
-        danhMuc: d._id || 'Chua phan loai',
+        danhMuc: d._id || 'Chưa phân loại',
         soLuong: d.soLuong,
       })),
       topBangGia,
+      hangSapHet,
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
