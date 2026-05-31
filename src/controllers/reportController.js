@@ -29,6 +29,22 @@ exports.dashboard = async (req, res) => {
       ]),
     ]);
 
+    // Doanh thu hôm nay & tháng này
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const [doanhThuHomNay, doanhThuThangNay] = await Promise.all([
+      HoaDon.aggregate([
+        { $match: { ngayBan: { $gte: todayStart }, trangThai: { $ne: 'Đã huỷ' } } },
+        { $group: { _id: null, total: { $sum: '$tongThanhToan' } } },
+      ]),
+      HoaDon.aggregate([
+        { $match: { ngayBan: { $gte: monthStart }, trangThai: { $ne: 'Đã huỷ' } } },
+        { $group: { _id: null, total: { $sum: '$tongThanhToan' } } },
+      ]),
+    ]);
+
     const [topBangGia, hangSapHet] = await Promise.all([
       BangGia.aggregate([
         { $match: { trangThai: HD } },
@@ -52,6 +68,8 @@ exports.dashboard = async (req, res) => {
       tongBangGia,
       tongDanhMuc,
       tongNCC,
+      doanhThuHomNay: doanhThuHomNay[0]?.total ?? 0,
+      doanhThuThangNay: doanhThuThangNay[0]?.total ?? 0,
       phanBoDanhMuc: phanBoDanhMuc.map((d) => ({
         danhMuc: d._id || 'Chưa phân loại',
         soLuong: d.soLuong,
