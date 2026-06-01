@@ -127,11 +127,10 @@ const importHangHoa = async (sheets, sheetId) => {
         tenHangHoa,
         donViNhoNhat: donViNhoNhat || '',
         danhMuc: danhMuc || '',
+        nhaCungCap: (nhaCungCap || '').trim(),  // lưu tên NCC dạng string
         ghiChu: ghiChu || '',
         trangThai: trangThai || 'Hoạt động',
         giaVon: fromSheets(giaVonRaw),
-        // nhaCungCap là ObjectId — chỉ set khi có giá trị thực, tránh cast "" → ObjectId lỗi
-        ...(nhaCungCap && nhaCungCap.trim() ? { nhaCungCap } : { nhaCungCap: null }),
       },
       { upsert: true, new: true }
     );
