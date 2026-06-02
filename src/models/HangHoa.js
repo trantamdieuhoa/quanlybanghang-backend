@@ -16,7 +16,7 @@ const hangHoaSchema = new mongoose.Schema({
     ref: 'DanhMuc',
     default: '',
   },
-  nhaCungCap: { type: String, default: '' },   // lưu tenNCC (string), không phải ObjectId
+  nhaCungCap: { type: [String], default: [] },  // nhiều NCC — lưu mảng tên NCC
   giaVon:        { type: Number, default: 0 },
   tonKho:        { type: Number, default: 0 },
   nguongCanhBao: { type: Number, default: 10 },

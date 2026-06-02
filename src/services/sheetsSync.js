@@ -127,7 +127,9 @@ const importHangHoa = async (sheets, sheetId) => {
         tenHangHoa,
         donViNhoNhat: donViNhoNhat || '',
         danhMuc: danhMuc || '',
-        nhaCungCap: (nhaCungCap || '').trim(),  // lưu tên NCC dạng string
+        nhaCungCap: (nhaCungCap || '').trim()
+          ? (nhaCungCap).trim().split(',').map(s => s.trim()).filter(Boolean)
+          : [],  // nhiều NCC phân cách bởi dấu phẩy trong Sheets
         ghiChu: ghiChu || '',
         trangThai: trangThai || 'Hoạt động',
         giaVon: fromSheets(giaVonRaw),
