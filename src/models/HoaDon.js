@@ -35,6 +35,7 @@ const HoaDonSchema = new mongoose.Schema({
   trangThai:     { type: String, enum: ['Ho\u1ea1t \u0111\u1ed9ng','\u0110\u00e3 hu\u1ef7'], default: 'Ho\u1ea1t \u0111\u1ed9ng' },
   ghiChu:        { type: String, default: '' },
   nguoiTao:      { type: String, default: '' },
+  hinhAnh:       { type: [String], default: [] },  // ảnh chụp hoá đơn (base64)
 }, { timestamps: true });
 
 HoaDonSchema.pre('save', function(next) {
