@@ -10,9 +10,16 @@ const nhaCungCapSchema = new mongoose.Schema({
   soDienThoai: { type: String, default: '' },
   diaChi:      { type: String, default: '' },
   email:       { type: String, default: '' },
-  ghiChu:      { type: String, default: '' },
-  tongCongNo:  { type: Number, default: 0 },
-  trangThai:   { type: String, enum: ['Hoạt động','Ngừng'], default: 'Hoạt động' },
+  ghiChu:       { type: String, default: '' },
+  // Thông tin chuyển khoản
+  tenNganHang:  { type: String, default: '' },
+  soTaiKhoan:   { type: String, default: '' },
+  chuTaiKhoan:  { type: String, default: '' },
+  chiNhanhNH:   { type: String, default: '' },
+  // Hình ảnh (URL)
+  hinhAnh:      { type: [String], default: [] },
+  tongCongNo:   { type: Number, default: 0 },
+  trangThai:    { type: String, enum: ['Hoạt động','Ngừng'], default: 'Hoạt động' },
 }, { timestamps: true });
 
 // Đồng bộ alias trước khi validate

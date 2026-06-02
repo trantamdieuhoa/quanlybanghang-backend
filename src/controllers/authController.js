@@ -20,7 +20,7 @@ exports.login = async (req, res) => {
 
     res.json({
       token: generateToken(user._id),
-      user: { id: user._id, username: user.username, hoTen: user.hoTen, role: user.role },
+      user: { id: user._id, username: user.username, hoTen: user.hoTen, role: user.role, permissions: user.permissions },
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -36,7 +36,7 @@ exports.register = async (req, res) => {
 
     const user = await User.create({ username, password, hoTen, role });
     res.status(201).json({
-      user: { id: user._id, username: user.username, hoTen: user.hoTen, role: user.role },
+      user: { id: user._id, username: user.username, hoTen: user.hoTen, role: user.role, permissions: user.permissions },
     });
   } catch (err) {
     res.status(500).json({ message: err.message });

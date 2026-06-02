@@ -115,6 +115,23 @@ exports.cancel = async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 };
 
+// DELETE /api/hoa-don/:id/force — xóa hẳn khỏi DB (admin only)
+exports.deleteForce = async (req, res) => {
+  try {
+    const hd = await HoaDon.findOne({ maHoaDon: req.params.id });
+    if (!hd) return res.status(404).json({ message: 'Không tìm thấy hoá đơn' });
+    // Hoàn lại công nợ khách hàng nếu có
+    if (hd.maKhachHang && hd.conNo > 0) {
+      await KhachHang.findOneAndUpdate(
+        { maKhachHang: hd.maKhachHang },
+        { $inc: { tongCongNo: -hd.conNo, tongMuaHang: -hd.tongThanhToan } }
+      );
+    }
+    await HoaDon.deleteOne({ maHoaDon: req.params.id });
+    res.json({ message: 'Đã xoá hoá đơn' });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+};
+
 exports.addPayment = async (req, res) => {
   try {
     const { soTien, phuongThuc } = req.body;
