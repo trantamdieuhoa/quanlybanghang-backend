@@ -4,7 +4,11 @@ exports.getAll = async (req, res) => {
   try {
     const { search = '' } = req.query;
     const filter = { trangThai: 'Hoạt động' };
-    if (search) filter.tenNCC = { $regex: search, $options: 'i' };
+    if (search) filter.$or = [
+      { tenNhaCungCap: { $regex: search, $options: 'i' } },
+      { tenNCC:        { $regex: search, $options: 'i' } },
+      { soDienThoai:   { $regex: search, $options: 'i' } },
+    ];
     const data = await NhaCungCap.find(filter).sort({ tenNCC: 1 });
     res.json(data);
   } catch (err) {
