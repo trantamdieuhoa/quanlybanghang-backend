@@ -2,8 +2,9 @@ const NhaCungCap = require('../models/NhaCungCap');
 
 exports.getAll = async (req, res) => {
   try {
-    const { search = '' } = req.query;
-    const filter = { trangThai: 'Hoạt động' };
+    const { search = '', all = '' } = req.query;
+    // all=1: trả tất cả (kể cả Ngừng) — dùng cho form chọn NCC của hàng hoá
+    const filter = all === '1' ? {} : { trangThai: 'Hoạt động' };
     if (search) filter.$or = [
       { tenNhaCungCap: { $regex: search, $options: 'i' } },
       { tenNCC:        { $regex: search, $options: 'i' } },

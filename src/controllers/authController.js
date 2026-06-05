@@ -1,8 +1,12 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-const generateToken = (id) =>
-  jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' });
+const ACCESS_EXPIRES  = process.env.JWT_EXPIRES_IN    || '2h';
+const REFRESH_EXPIRES = process.env.JWT_REFRESH_EXPIRES || '30d';
+const REFRESH_SECRET  = process.env.JWT_REFRESH_SECRET || (process.env.JWT_SECRET + '_refresh');
+
+const generateToken        = (id) => jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: ACCESS_EXPIRES });
+const generateRefreshToken = (id) => jwt.sign({ id }, REFRESH_SECRET,          { expiresIn: REFRESH_EXPIRES });
 
 // POST /api/auth/login
 exports.login = async (req, res) => {
@@ -19,9 +23,33 @@ exports.login = async (req, res) => {
       return res.status(403).json({ message: 'Tài khoản đã bị khoá' });
 
     res.json({
-      token: generateToken(user._id),
+      token:        generateToken(user._id),
+      refreshToken: generateRefreshToken(user._id),
       user: { id: user._id, username: user.username, hoTen: user.hoTen, role: user.role, permissions: user.permissions },
     });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// POST /api/auth/refresh
+exports.refresh = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) return res.status(400).json({ message: 'Thiếu refreshToken' });
+
+    let payload;
+    try {
+      payload = jwt.verify(refreshToken, REFRESH_SECRET);
+    } catch {
+      return res.status(401).json({ message: 'refreshToken không hợp lệ hoặc đã hết hạn' });
+    }
+
+    const user = await User.findById(payload.id).select('_id trangThai');
+    if (!user || user.trangThai === 'Khoá')
+      return res.status(401).json({ message: 'Tài khoản không hợp lệ' });
+
+    res.json({ token: generateToken(user._id) });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

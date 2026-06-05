@@ -1,18 +1,22 @@
 const HangHoa = require('../models/HangHoa');
 
-// GET /api/hang-hoa?page=1&limit=20&search=&danhMuc=
+// GET /api/hang-hoa?page=1&limit=50&search=&danhMuc=&sortBy=ngayCapNhat&sortOrder=desc
 exports.getAll = async (req, res) => {
   try {
-    const { page = 1, limit = 50, search = '', danhMuc = '', trangThai = '' } = req.query;
+    const { page = 1, limit = 50, search = '', danhMuc = '', trangThai = '',
+            sortBy = 'ngayCapNhat', sortOrder = 'desc' } = req.query;
     const filter = {};
     if (search) filter.tenHangHoa = { $regex: search, $options: 'i' };
     if (danhMuc) filter.danhMuc = danhMuc;
     if (trangThai) filter.trangThai = trangThai;
 
+    const allowedSort = ['tenHangHoa','danhMuc','donViNhoNhat','tonKho','giaVon','ngayCapNhat'];
+    const sortField = allowedSort.includes(sortBy) ? sortBy : 'ngayCapNhat';
+    const sortDir   = sortOrder === 'asc' ? 1 : -1;
+
     const [data, total] = await Promise.all([
       HangHoa.find(filter)
-        .populate('nhaCungCap', 'tenNCC')
-        .sort({ ngayCapNhat: -1 })
+        .sort({ [sortField]: sortDir })
         .skip((page - 1) * limit)
         .limit(Number(limit)),
       HangHoa.countDocuments(filter),
@@ -27,7 +31,7 @@ exports.getAll = async (req, res) => {
 // GET /api/hang-hoa/:id
 exports.getOne = async (req, res) => {
   try {
-    const item = await HangHoa.findOne({ maHangHoa: req.params.id }).populate('nhaCungCap', 'tenNCC maNCC');
+    const item = await HangHoa.findOne({ maHangHoa: req.params.id });
     if (!item) return res.status(404).json({ message: 'Không tìm thấy hàng hoá' });
     res.json(item);
   } catch (err) {

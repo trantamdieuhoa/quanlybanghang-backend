@@ -190,3 +190,73 @@ exports.monthly = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+// GET /api/reports/weekly — doanh thu 7 ngày gần nhất
+exports.weekly = async (req, res) => {
+  try {
+    const now = new Date();
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      days.push(d.toISOString().slice(0, 10));
+    }
+    const weekStart = new Date(days[0]);
+    weekStart.setHours(0, 0, 0, 0);
+
+    const rows = await HoaDon.aggregate([
+      { $match: { ngayBan: { $gte: weekStart }, trangThai: { $ne: 'Đã huỷ' } } },
+      { $group: {
+          _id: { $dateToString: { format: '%Y-%m-%d', date: '$ngayBan', timezone: '+07:00' } },
+          doanhThu: { $sum: '$tongThanhToan' },
+          soHoaDon: { $sum: 1 },
+      }},
+    ]);
+
+    const map = Object.fromEntries(rows.map((r) => [r._id, r]));
+    const data = days.map((d) => ({
+      ngay: d,
+      doanhThu: map[d]?.doanhThu ?? 0,
+      soHoaDon: map[d]?.soHoaDon ?? 0,
+    }));
+
+    res.json({ data });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// GET /api/reports/weekly — doanh thu 7 ngày gần nhất
+exports.weekly = async (req, res) => {
+  try {
+    const now = new Date();
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      days.push(d.toISOString().slice(0, 10));
+    }
+    const weekStart = new Date(days[0]);
+    weekStart.setHours(0, 0, 0, 0);
+
+    const rows = await HoaDon.aggregate([
+      { $match: { ngayBan: { $gte: weekStart }, trangThai: { $ne: 'Đã huỷ' } } },
+      { $group: {
+          _id: { $dateToString: { format: '%Y-%m-%d', date: '$ngayBan', timezone: '+07:00' } },
+          doanhThu: { $sum: '$tongThanhToan' },
+          soHoaDon: { $sum: 1 },
+      }},
+    ]);
+
+    const map = Object.fromEntries(rows.map((r) => [r._id, r]));
+    const data = days.map((d) => ({
+      ngay: d,
+      doanhThu: map[d]?.doanhThu ?? 0,
+      soHoaDon: map[d]?.soHoaDon ?? 0,
+    }));
+
+    res.json({ data });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
