@@ -41,11 +41,16 @@ const toSheets = (val) => {
 };
 
 const clearAndWrite = async (sheets, sheetId, sheetName, rows) => {
+  // Không xoá khi không có dữ liệu — tránh mất sheet khi DB rỗng
+  if (rows.length === 0) {
+    console.warn(`[Sheets] ${sheetName}: 0 rows — bỏ qua để tránh xoá sheet`);
+    return;
+  }
+  // Chuẩn bị xong mới xoá → ghi, giảm rủi ro mất dữ liệu
   await sheets.spreadsheets.values.clear({
     spreadsheetId: sheetId,
     range: `${sheetName}!A2:Z`,
   });
-  if (rows.length === 0) return;
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
     range: `${sheetName}!A2`,
@@ -63,7 +68,7 @@ const exportHangHoa = async (sheets, sheetId) => {
     h.tenHangHoa,
     h.donViNhoNhat || '',
     h.danhMuc || '',
-    h.nhaCungCap || '',
+    Array.isArray(h.nhaCungCap) ? h.nhaCungCap.join(', ') : (h.nhaCungCap || ''),
     h.ghiChu || '',
     h.trangThai,
     formatDate(h.ngayCapNhat),
@@ -117,6 +122,13 @@ const readSheet = async (sheets, sheetId, sheetName) => {
 
 const importHangHoa = async (sheets, sheetId) => {
   const rows = await readSheet(sheets, sheetId, 'HangHoa');
+
+  // Guard: sheet rỗng hoặc < 3 dòng → dừng, không xoá MongoDB
+  if (rows.length < 3) {
+    console.warn(`[Sheets] HangHoa: chỉ có ${rows.length} dòng — bỏ qua import để bảo vệ dữ liệu`);
+    return 0;
+  }
+
   const validIds = [];
   for (const row of rows) {
     const [maHangHoa, tenHangHoa, donViNhoNhat, danhMuc, nhaCungCap, ghiChu, trangThai, , giaVonRaw] = row;
@@ -128,8 +140,8 @@ const importHangHoa = async (sheets, sheetId) => {
         donViNhoNhat: donViNhoNhat || '',
         danhMuc: danhMuc || '',
         nhaCungCap: (nhaCungCap || '').trim()
-          ? (nhaCungCap).trim().split(',').map(s => s.trim()).filter(Boolean)
-          : [],  // nhiều NCC phân cách bởi dấu phẩy trong Sheets
+          ? nhaCungCap.trim().split(',').map(s => s.trim()).filter(Boolean)
+          : [],
         ghiChu: ghiChu || '',
         trangThai: trangThai || 'Hoạt động',
         giaVon: fromSheets(giaVonRaw),
@@ -138,8 +150,8 @@ const importHangHoa = async (sheets, sheetId) => {
     );
     validIds.push(maHangHoa);
   }
-  // Xóa các records không có trong Sheets
-  if (validIds.length > 0) {
+  // Chỉ xoá nếu import được ít nhất 3 records
+  if (validIds.length >= 3) {
     await HangHoa.deleteMany({ maHangHoa: { $nin: validIds } });
   }
   return validIds.length;
