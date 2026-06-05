@@ -81,7 +81,8 @@ app.listen(PORT, '0.0.0.0', async () => {
     } catch (err) {
       console.warn('[Sheets] Auto-import skipped:', err.message);
     }
-    sheetsSync.startAutoSync();
+    // Auto-sync cron đã TẮT — chỉ sync thủ công hoặc khi mở/tắt app
+    // sheetsSync.startAutoSync();
   } else {
     console.log('[Sheets] Google Sheets not configured, skipping sync');
   }
