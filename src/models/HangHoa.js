@@ -26,6 +26,7 @@ const hangHoaSchema = new mongoose.Schema({
     enum: ['Hoạt động', 'Ngừng'],
     default: 'Hoạt động',
   },
+  coHang: { type: Boolean, default: true }, // tự chọn: true = còn hàng, false = hết hàng (độc lập tonKho)
   ngayCapNhat: { type: Date, default: Date.now },
 }, { timestamps: true });
 

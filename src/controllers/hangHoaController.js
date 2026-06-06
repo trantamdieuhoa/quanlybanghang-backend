@@ -9,8 +9,8 @@ exports.getAll = async (req, res) => {
     if (search) filter.tenHangHoa = { $regex: search, $options: 'i' };
     if (danhMuc) filter.danhMuc = danhMuc;
     if (trangThai) filter.trangThai = trangThai;
-    if (trangThaiKho === 'con') filter.tonKho = { $gt: 0 };
-    else if (trangThaiKho === 'het') filter.tonKho = { $lte: 0 };
+    if (trangThaiKho === 'con') filter.coHang = true;
+    else if (trangThaiKho === 'het') filter.coHang = false;
 
     const allowedSort = ['tenHangHoa','danhMuc','donViNhoNhat','tonKho','giaVon','ngayCapNhat'];
     const sortField = allowedSort.includes(sortBy) ? sortBy : 'ngayCapNhat';
