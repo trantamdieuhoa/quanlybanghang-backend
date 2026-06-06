@@ -4,11 +4,13 @@ const HangHoa = require('../models/HangHoa');
 exports.getAll = async (req, res) => {
   try {
     const { page = 1, limit = 50, search = '', danhMuc = '', trangThai = '',
-            sortBy = 'ngayCapNhat', sortOrder = 'desc' } = req.query;
+            trangThaiKho = '', sortBy = 'ngayCapNhat', sortOrder = 'desc' } = req.query;
     const filter = {};
     if (search) filter.tenHangHoa = { $regex: search, $options: 'i' };
     if (danhMuc) filter.danhMuc = danhMuc;
     if (trangThai) filter.trangThai = trangThai;
+    if (trangThaiKho === 'con') filter.tonKho = { $gt: 0 };
+    else if (trangThaiKho === 'het') filter.tonKho = { $lte: 0 };
 
     const allowedSort = ['tenHangHoa','danhMuc','donViNhoNhat','tonKho','giaVon','ngayCapNhat'];
     const sortField = allowedSort.includes(sortBy) ? sortBy : 'ngayCapNhat';
