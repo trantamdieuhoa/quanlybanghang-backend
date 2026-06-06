@@ -9,7 +9,8 @@ exports.getAll = async (req, res) => {
     if (search) filter.tenHangHoa = { $regex: search, $options: 'i' };
     if (danhMuc) filter.danhMuc = danhMuc;
     if (trangThai) filter.trangThai = trangThai;
-    if (trangThaiKho === 'con') filter.coHang = true;
+    // Hàng cũ chưa có field coHang (null) → coi là còn hàng
+    if (trangThaiKho === 'con') filter.coHang = { $ne: false };
     else if (trangThaiKho === 'het') filter.coHang = false;
 
     const allowedSort = ['tenHangHoa','danhMuc','donViNhoNhat','tonKho','giaVon','ngayCapNhat'];
