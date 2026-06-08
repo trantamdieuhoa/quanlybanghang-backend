@@ -57,6 +57,14 @@ exports.create = async (req, res) => {
       ));
     }
     await Promise.all(promises);
+
+    // Tự động đánh dấu hết hàng cho các SP vừa bán mà tonKho về <= 0
+    const maCodesInOrder = [...new Set(hd.chiTiet.map((c) => c.maHangHoa))];
+    await HangHoa.updateMany(
+      { maHangHoa: { $in: maCodesInOrder }, tonKho: { $lte: 0 }, coHang: { $ne: false } },
+      { $set: { coHang: false } }
+    );
+
     res.status(201).json(hd);
   } catch (err) { res.status(400).json({ message: err.message }); }
 };
