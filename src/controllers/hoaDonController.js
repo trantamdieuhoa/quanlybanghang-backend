@@ -2,6 +2,33 @@ const HoaDon    = require('../models/HoaDon');
 const KhachHang = require('../models/KhachHang');
 const HangHoa   = require('../models/HangHoa');
 
+// Helper ghi log vào document (chưa save)
+const addLog = (hd, hanhDong, nguoi, chiTiet = '') => {
+  hd.lichSu.push({
+    hanhDong,
+    nguoiThucHien: nguoi || 'Hệ thống',
+    thoiGian: new Date(),
+    chiTiet,
+  });
+};
+
+// Mô tả thay đổi chi tiết
+const describeChiTiet = (oldList, newList) => {
+  const oldMap = Object.fromEntries(oldList.map(c => [c.maHangHoa, c]));
+  const newMap = Object.fromEntries(newList.map(c => [c.maHangHoa, c]));
+  const allMa  = new Set([...oldList.map(c => c.maHangHoa), ...newList.map(c => c.maHangHoa)]);
+  const parts  = [];
+  for (const ma of allMa) {
+    const o = oldMap[ma]; const n = newMap[ma];
+    const ten = (n || o).tenHangHoa || ma;
+    if (!o)                             parts.push(`Thêm ${ten} (×${n.soLuong})`);
+    else if (!n)                        parts.push(`Xoá ${ten}`);
+    else if (o.soLuong !== n.soLuong)   parts.push(`${ten}: ${o.soLuong}→${n.soLuong}`);
+    else if (o.donGia  !== n.donGia)    parts.push(`${ten}: giá ${o.donGia}→${n.donGia}`);
+  }
+  return parts.join(' • ') || 'Không thay đổi';
+};
+
 exports.getAll = async (req, res) => {
   try {
     const { search='', maKhachHang, trangThaiTT, from, to, page=1, limit=50 } = req.query;
@@ -45,6 +72,8 @@ exports.create = async (req, res) => {
       body.chiTiet = body.chiTiet.map((c) => ({ ...c, giaVon: giaVonMap[c.maHangHoa] ?? 0 }));
     }
     const hd = new HoaDon(body);
+    addLog(hd, 'Tạo hoá đơn', req.user?.username,
+      `${hd.chiTiet.length} sản phẩm • KH: ${hd.tenKhachHang}`);
     await hd.save();
     const promises = [];
     for (const ct of hd.chiTiet) {
@@ -73,7 +102,14 @@ exports.update = async (req, res) => {
   try {
     const old = await HoaDon.findOne({ maHoaDon: req.params.id });
     if (!old) return res.status(404).json({ message: 'Khong tim thay hoa don' });
+    const changed = [];
+    if (req.body.ghiChu   !== undefined && req.body.ghiChu   !== old.ghiChu)   changed.push('ghi chú');
+    if (req.body.giamGia  !== undefined && req.body.giamGia  !== old.giamGia)  changed.push('giảm giá');
+    if (req.body.phuongThucTT !== undefined && req.body.phuongThucTT !== old.phuongThucTT)
+      changed.push(`PT thanh toán → ${req.body.phuongThucTT}`);
     Object.assign(old, req.body);
+    addLog(old, 'Sửa thông tin', req.user?.username,
+      changed.length ? changed.join(' • ') : 'Cập nhật');
     await old.save();
     res.json(old);
   } catch (err) { res.status(400).json({ message: err.message }); }
@@ -98,10 +134,12 @@ exports.updateChiTiet = async (req, res) => {
         stockPromises.push(HangHoa.findOneAndUpdate({ maHangHoa: ma }, { $inc: { tonKho: -delta } }));
       }
     }
+    const desc = describeChiTiet(oldChiTiet, newChiTiet);
     hd.chiTiet = newChiTiet.map(ct => {
       const old = oldChiTiet.find(c => c.maHangHoa === ct.maHangHoa) || {};
       return { ...ct, soLuongDaTra: old.soLuongDaTra || 0, giaVon: old.giaVon || ct.giaVon || 0 };
     });
+    addLog(hd, 'Sửa chi tiết', req.user?.username, desc);
     await Promise.all([hd.save(), ...stockPromises]);
     res.json(hd);
   } catch (err) { res.status(400).json({ message: err.message }); }
@@ -118,6 +156,7 @@ exports.cancel = async (req, res) => {
       );
     }
     hd.trangThai = 'Đã huỷ';
+    addLog(hd, 'Huỷ hoá đơn', req.user?.username, `Tổng: ${hd.tongThanhToan.toLocaleString('vi-VN')}đ`);
     await hd.save();
     res.json({ message: 'Da huy hoa don' });
   } catch (err) { res.status(500).json({ message: err.message }); }
@@ -147,6 +186,8 @@ exports.addPayment = async (req, res) => {
     if (!hd) return res.status(404).json({ message: 'Khong tim thay hoa don' });
     const oldNo = hd.conNo;
     hd.daThanhToan = Math.min(hd.tongThanhToan, hd.daThanhToan + Number(soTien));
+    addLog(hd, 'Thanh toán thêm', req.user?.username,
+      `+${Number(soTien).toLocaleString('vi-VN')}đ (${phuongThuc || 'Tiền mặt'})`);
     await hd.save();
     const diff = oldNo - hd.conNo;
     if (hd.maKhachHang && diff > 0) {

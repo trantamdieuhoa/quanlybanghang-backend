@@ -1,5 +1,12 @@
 const mongoose = require('mongoose');
 
+const LichSuSchema = new mongoose.Schema({
+  hanhDong:        { type: String, required: true },
+  nguoiThucHien:   { type: String, default: '' },
+  thoiGian:        { type: Date, default: Date.now },
+  chiTiet:         { type: String, default: '' },
+}, { _id: false });
+
 const ChiTietSchema = new mongoose.Schema({
   maHangHoa:    { type: String, required: true },
   tenHangHoa:   { type: String, required: true },
@@ -36,6 +43,7 @@ const HoaDonSchema = new mongoose.Schema({
   ghiChu:        { type: String, default: '' },
   nguoiTao:      { type: String, default: '' },
   hinhAnh:       { type: [String], default: [] },  // ảnh chụp hoá đơn (base64)
+  lichSu:        { type: [LichSuSchema], default: [] },
 }, { timestamps: true });
 
 HoaDonSchema.pre('save', function(next) {
