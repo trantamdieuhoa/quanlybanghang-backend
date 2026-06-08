@@ -37,11 +37,25 @@ exports.dashboard = async (req, res) => {
     const [doanhThuHomNay, doanhThuThangNay] = await Promise.all([
       HoaDon.aggregate([
         { $match: { ngayBan: { $gte: todayStart }, trangThai: { $ne: 'Đã huỷ' } } },
-        { $group: { _id: null, total: { $sum: '$tongThanhToan' } } },
+        { $group: {
+            _id: null,
+            total: { $sum: '$tongThanhToan' },
+            giaVon: { $sum: { $reduce: {
+              input: '$chiTiet', initialValue: 0,
+              in: { $add: ['$$value', { $multiply: [{ $ifNull: ['$$this.giaVon', 0] }, { $ifNull: ['$$this.soLuong', 0] }] }] }
+            }}},
+        }},
       ]),
       HoaDon.aggregate([
         { $match: { ngayBan: { $gte: monthStart }, trangThai: { $ne: 'Đã huỷ' } } },
-        { $group: { _id: null, total: { $sum: '$tongThanhToan' } } },
+        { $group: {
+            _id: null,
+            total: { $sum: '$tongThanhToan' },
+            giaVon: { $sum: { $reduce: {
+              input: '$chiTiet', initialValue: 0,
+              in: { $add: ['$$value', { $multiply: [{ $ifNull: ['$$this.giaVon', 0] }, { $ifNull: ['$$this.soLuong', 0] }] }] }
+            }}},
+        }},
       ]),
     ]);
 
@@ -69,7 +83,9 @@ exports.dashboard = async (req, res) => {
       tongDanhMuc,
       tongNCC,
       doanhThuHomNay: doanhThuHomNay[0]?.total ?? 0,
+      loiNhuanHomNay: (doanhThuHomNay[0]?.total ?? 0) - (doanhThuHomNay[0]?.giaVon ?? 0),
       doanhThuThangNay: doanhThuThangNay[0]?.total ?? 0,
+      loiNhuanThangNay: (doanhThuThangNay[0]?.total ?? 0) - (doanhThuThangNay[0]?.giaVon ?? 0),
       phanBoDanhMuc: phanBoDanhMuc.map((d) => ({
         danhMuc: d._id || 'Chưa phân loại',
         soLuong: d.soLuong,
@@ -168,13 +184,16 @@ exports.monthly = async (req, res) => {
       for (const ct of h.chiTiet || []) {
         const ma = ct.maHangHoa;
         if (!prodMap[ma]) {
-          prodMap[ma] = { _id: ma, tenHangHoa: ct.tenHangHoa, soLuong: 0, doanhThu: 0 };
+          prodMap[ma] = { _id: ma, tenHangHoa: ct.tenHangHoa, soLuong: 0, doanhThu: 0, giaVon: 0 };
         }
-        prodMap[ma].soLuong  += ct.soLuong || 0;
-        prodMap[ma].doanhThu += ct.thanhTien || (ct.soLuong * ct.donGia) || 0;
+        const sl = ct.soLuong || 0;
+        prodMap[ma].soLuong  += sl;
+        prodMap[ma].doanhThu += ct.thanhTien || (sl * (ct.donGia || 0));
+        prodMap[ma].giaVon   += (ct.giaVon || 0) * sl;
       }
     }
     const topProducts = Object.values(prodMap)
+      .map((p) => ({ ...p, loiNhuan: p.doanhThu - p.giaVon }))
       .sort((a, b) => b.doanhThu - a.doanhThu)
       .slice(0, 10);
 
@@ -191,7 +210,7 @@ exports.monthly = async (req, res) => {
   }
 };
 
-// GET /api/reports/weekly — doanh thu 7 ngày gần nhất
+// GET /api/reports/weekly — doanh thu + lợi nhuận 7 ngày gần nhất
 exports.weekly = async (req, res) => {
   try {
     const now = new Date();
@@ -210,6 +229,10 @@ exports.weekly = async (req, res) => {
           _id: { $dateToString: { format: '%Y-%m-%d', date: '$ngayBan', timezone: '+07:00' } },
           doanhThu: { $sum: '$tongThanhToan' },
           soHoaDon: { $sum: 1 },
+          giaVon: { $sum: { $reduce: {
+            input: '$chiTiet', initialValue: 0,
+            in: { $add: ['$$value', { $multiply: [{ $ifNull: ['$$this.giaVon', 0] }, { $ifNull: ['$$this.soLuong', 0] }] }] }
+          }}},
       }},
     ]);
 
@@ -218,6 +241,7 @@ exports.weekly = async (req, res) => {
       ngay: d,
       doanhThu: map[d]?.doanhThu ?? 0,
       soHoaDon: map[d]?.soHoaDon ?? 0,
+      loiNhuan: (map[d]?.doanhThu ?? 0) - (map[d]?.giaVon ?? 0),
     }));
 
     res.json({ data });
@@ -226,7 +250,7 @@ exports.weekly = async (req, res) => {
   }
 };
 
-// GET /api/reports/weekly — doanh thu 7 ngày gần nhất
+// GET /api/reports/weekly — doanh thu + lợi nhuận 7 ngày gần nhất
 exports.weekly = async (req, res) => {
   try {
     const now = new Date();
@@ -245,6 +269,10 @@ exports.weekly = async (req, res) => {
           _id: { $dateToString: { format: '%Y-%m-%d', date: '$ngayBan', timezone: '+07:00' } },
           doanhThu: { $sum: '$tongThanhToan' },
           soHoaDon: { $sum: 1 },
+          giaVon: { $sum: { $reduce: {
+            input: '$chiTiet', initialValue: 0,
+            in: { $add: ['$$value', { $multiply: [{ $ifNull: ['$$this.giaVon', 0] }, { $ifNull: ['$$this.soLuong', 0] }] }] }
+          }}},
       }},
     ]);
 
@@ -253,6 +281,7 @@ exports.weekly = async (req, res) => {
       ngay: d,
       doanhThu: map[d]?.doanhThu ?? 0,
       soHoaDon: map[d]?.soHoaDon ?? 0,
+      loiNhuan: (map[d]?.doanhThu ?? 0) - (map[d]?.giaVon ?? 0),
     }));
 
     res.json({ data });
