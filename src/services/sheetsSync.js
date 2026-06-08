@@ -133,27 +133,30 @@ const importHangHoa = async (sheets, sheetId) => {
   for (const row of rows) {
     const [maHangHoa, tenHangHoa, donViNhoNhat, danhMuc, nhaCungCap, ghiChu, trangThai, , giaVonRaw] = row;
     if (!maHangHoa || !tenHangHoa) continue;
+
+    const updateFields = {
+      tenHangHoa,
+      donViNhoNhat: donViNhoNhat || '',
+      danhMuc: danhMuc || '',
+      ghiChu: ghiChu || '',
+      trangThai: trangThai || 'Hoạt động',
+      giaVon: fromSheets(giaVonRaw),
+    };
+
+    // Chỉ ghi đè nhaCungCap nếu Sheets có giá trị — tránh xoá NCC đã chọn trong app
+    if ((nhaCungCap || '').trim()) {
+      updateFields.nhaCungCap = nhaCungCap.trim().split(',').map(s => s.trim()).filter(Boolean);
+    }
+
     await HangHoa.findOneAndUpdate(
       { maHangHoa },
-      {
-        tenHangHoa,
-        donViNhoNhat: donViNhoNhat || '',
-        danhMuc: danhMuc || '',
-        nhaCungCap: (nhaCungCap || '').trim()
-          ? nhaCungCap.trim().split(',').map(s => s.trim()).filter(Boolean)
-          : [],
-        ghiChu: ghiChu || '',
-        trangThai: trangThai || 'Hoạt động',
-        giaVon: fromSheets(giaVonRaw),
-      },
+      { $set: updateFields },
       { upsert: true, new: true }
     );
     validIds.push(maHangHoa);
   }
-  // Chỉ xoá nếu import được ít nhất 3 records
-  if (validIds.length >= 3) {
-    await HangHoa.deleteMany({ maHangHoa: { $nin: validIds } });
-  }
+  // KHÔNG xoá record trong MongoDB — hàng tạo trong app sẽ không bị mất
+  // khi import từ Sheets. Muốn xoá phải thao tác thủ công trong app.
   return validIds.length;
 };
 
