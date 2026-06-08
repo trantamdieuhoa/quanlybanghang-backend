@@ -9,7 +9,7 @@
  *   → Export MongoDB→Sheets: chia ÷1000
  *
  * Cấu trúc Sheets phải khớp file mẫu:
- *   - Sheet "HangHoa"        : ID | Tên | ĐVT nhỏ nhất | Danh mục | NCC | Ghi chú | Trạng thái | Ngày | Giá nhập(nghìn)
+ *   - Sheet "HangHoa"        : ID | Tên | ĐVT nhỏ nhất | Danh mục | NCC | Ghi chú | Trạng thái | Ngày | Giá nhập(nghìn) | Còn hàng
  *   - Sheet "BangGiaChiTiet" : ID giá | ID hàng | Tên hàng | Quy cách | Số lượng | Đơn vị | Giá bán(nghìn) | Giá/đvt | Ghi chú | Trạng thái
  *   - Sheet "DanhMuc"        : ID | Tên | Mô tả
  *   - Sheet "DonViTinh"      : Đơn vị tính | Ghi chú
@@ -73,6 +73,7 @@ const exportHangHoa = async (sheets, sheetId) => {
     h.trangThai,
     formatDate(h.ngayCapNhat),
     toSheets(h.giaVon),          // đồng → nghìn đồng
+    h.coHang !== false ? 'true' : 'false', // còn hàng / hết hàng
   ]);
   await clearAndWrite(sheets, sheetId, 'HangHoa', rows);
   return rows.length;
@@ -131,7 +132,7 @@ const importHangHoa = async (sheets, sheetId) => {
 
   const validIds = [];
   for (const row of rows) {
-    const [maHangHoa, tenHangHoa, donViNhoNhat, danhMuc, nhaCungCap, ghiChu, trangThai, , giaVonRaw] = row;
+    const [maHangHoa, tenHangHoa, donViNhoNhat, danhMuc, nhaCungCap, ghiChu, trangThai, , giaVonRaw, coHangRaw] = row;
     if (!maHangHoa || !tenHangHoa) continue;
 
     const updateFields = {
@@ -142,6 +143,11 @@ const importHangHoa = async (sheets, sheetId) => {
       trangThai: trangThai || 'Hoạt động',
       giaVon: fromSheets(giaVonRaw),
     };
+
+    // Chỉ ghi đè coHang nếu Sheets có giá trị rõ ràng ('true'/'false')
+    if (coHangRaw === 'true' || coHangRaw === 'false') {
+      updateFields.coHang = coHangRaw === 'true';
+    }
 
     // Chỉ ghi đè nhaCungCap nếu Sheets có giá trị — tránh xoá NCC đã chọn trong app
     if ((nhaCungCap || '').trim()) {
@@ -178,10 +184,7 @@ const importBangGia = async (sheets, sheetId) => {
     );
     validIds.push(maGia);
   }
-  // Xóa các records không có trong Sheets
-  if (validIds.length > 0) {
-    await BangGia.deleteMany({ maGia: { $nin: validIds } });
-  }
+  // KHÔNG xoá record trong MongoDB — bảng giá tạo trong app sẽ không bị mất
   return validIds.length;
 };
 
