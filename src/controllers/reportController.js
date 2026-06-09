@@ -59,7 +59,7 @@ exports.dashboard = async (req, res) => {
       ]),
     ]);
 
-    const [topBangGia, hangSapHet] = await Promise.all([
+    const [topBangGia, hangSapHet, topSanPham] = await Promise.all([
       BangGia.aggregate([
         { $match: { trangThai: HD } },
         { $group: { _id: '$maHangHoa', tenHangHoa: { $first: '$tenHangHoa' }, soQuyCach: { $sum: 1 } } },
@@ -73,6 +73,20 @@ exports.dashboard = async (req, res) => {
         .sort({ tonKho: 1 })
         .limit(20)
         .lean(),
+      HoaDon.aggregate([
+        { $match: { ngayBan: { $gte: monthStart }, trangThai: { $ne: 'Đã huỷ' } } },
+        { $unwind: '$chiTiet' },
+        { $group: {
+            _id: '$chiTiet.maHangHoa',
+            tenHangHoa: { $first: '$chiTiet.tenHangHoa' },
+            soLuong:    { $sum: '$chiTiet.soLuong' },
+            doanhThu:   { $sum: '$chiTiet.thanhTien' },
+            giaVon:     { $sum: { $multiply: ['$chiTiet.giaVon', '$chiTiet.soLuong'] } },
+        }},
+        { $addFields: { loiNhuan: { $subtract: ['$doanhThu', '$giaVon'] } } },
+        { $sort: { doanhThu: -1 } },
+        { $limit: 5 },
+      ]),
     ]);
 
     res.json({
@@ -92,6 +106,7 @@ exports.dashboard = async (req, res) => {
       })),
       topBangGia,
       hangSapHet,
+      topSanPham,
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
