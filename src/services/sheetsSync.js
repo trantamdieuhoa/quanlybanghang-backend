@@ -33,12 +33,8 @@ const formatDate = (d) => {
 // Sheets lưu nghìn đồng → chuyển về đồng
 const fromSheets = (val) => Math.round((Number(val) || 0) * 1000);
 
-// MongoDB lưu đồng → chuyển về nghìn đồng cho Sheets
-const toSheets = (val) => {
-  const v = Number(val) || 0;
-  // Nếu đã là đơn vị nghìn (nhỏ hơn 1000) thì không chia
-  return v >= 1000 ? v / 1000 : v;
-};
+// MongoDB lưu đồng → chuyển về nghìn đồng cho Sheets (luôn chia 1000)
+const toSheets = (val) => (Number(val) || 0) / 1000;
 
 const clearAndWrite = async (sheets, sheetId, sheetName, rows) => {
   // Không xoá khi không có dữ liệu — tránh mất sheet khi DB rỗng

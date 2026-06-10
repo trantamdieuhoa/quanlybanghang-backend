@@ -1,4 +1,5 @@
-const DanhMuc = require('../models/DanhMuc');
+const DanhMuc  = require('../models/DanhMuc');
+const HangHoa  = require('../models/HangHoa');
 
 exports.getAll = async (req, res) => {
   try {
@@ -41,6 +42,11 @@ exports.remove = async (req, res) => {
       { new: true }
     );
     if (!item) return res.status(404).json({ message: 'Không tìm thấy danh mục' });
+    // Reset danhMuc về rỗng cho tất cả hàng hoá đang dùng danh mục này
+    await HangHoa.updateMany(
+      { danhMuc: item.tenDanhMuc },
+      { $set: { danhMuc: '' } }
+    );
     res.json({ message: 'Đã xoá danh mục', item });
   } catch (err) {
     res.status(500).json({ message: err.message });

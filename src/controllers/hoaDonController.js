@@ -149,10 +149,16 @@ exports.cancel = async (req, res) => {
   try {
     const hd = await HoaDon.findOne({ maHoaDon: req.params.id });
     if (!hd) return res.status(404).json({ message: 'Khong tim thay hoa don' });
-    if (hd.maKhachHang && hd.conNo > 0) {
+    // Hoàn lại tồn kho
+    const stockPromises = hd.chiTiet.map((ct) =>
+      HangHoa.findOneAndUpdate({ maHangHoa: ct.maHangHoa }, { $inc: { tonKho: ct.soLuong } })
+    );
+    await Promise.all(stockPromises);
+    // Hoàn lại thống kê khách hàng (cả đơn đã TT đủ lẫn còn nợ)
+    if (hd.maKhachHang) {
       await KhachHang.findOneAndUpdate(
         { maKhachHang: hd.maKhachHang },
-        { $inc: { tongCongNo: -hd.conNo, tongMuaHang: -hd.tongThanhToan } }
+        { $inc: { tongCongNo: hd.conNo > 0 ? -hd.conNo : 0, tongMuaHang: -hd.tongThanhToan } }
       );
     }
     hd.trangThai = 'Đã huỷ';
@@ -167,11 +173,16 @@ exports.deleteForce = async (req, res) => {
   try {
     const hd = await HoaDon.findOne({ maHoaDon: req.params.id });
     if (!hd) return res.status(404).json({ message: 'Không tìm thấy hoá đơn' });
-    // Hoàn lại công nợ khách hàng nếu có
-    if (hd.maKhachHang && hd.conNo > 0) {
+    // Hoàn lại tồn kho
+    const stockPromises = hd.chiTiet.map((ct) =>
+      HangHoa.findOneAndUpdate({ maHangHoa: ct.maHangHoa }, { $inc: { tonKho: ct.soLuong } })
+    );
+    await Promise.all(stockPromises);
+    // Hoàn lại thống kê khách hàng
+    if (hd.maKhachHang) {
       await KhachHang.findOneAndUpdate(
         { maKhachHang: hd.maKhachHang },
-        { $inc: { tongCongNo: -hd.conNo, tongMuaHang: -hd.tongThanhToan } }
+        { $inc: { tongCongNo: hd.conNo > 0 ? -hd.conNo : 0, tongMuaHang: -hd.tongThanhToan } }
       );
     }
     await HoaDon.deleteOne({ maHoaDon: req.params.id });
