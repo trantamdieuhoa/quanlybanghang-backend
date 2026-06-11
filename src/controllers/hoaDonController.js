@@ -105,6 +105,8 @@ exports.update = async (req, res) => {
     const changed = [];
     if (req.body.ghiChu   !== undefined && req.body.ghiChu   !== old.ghiChu)   changed.push('ghi chú');
     if (req.body.giamGia  !== undefined && req.body.giamGia  !== old.giamGia)  changed.push('giảm giá');
+    if (req.body.giamGiaPhanTram !== undefined && req.body.giamGiaPhanTram !== old.giamGiaPhanTram)
+      changed.push(`giảm giá ${req.body.giamGiaPhanTram}%`);
     if (req.body.phuongThucTT !== undefined && req.body.phuongThucTT !== old.phuongThucTT)
       changed.push(`PT thanh toán → ${req.body.phuongThucTT}`);
     Object.assign(old, req.body);
@@ -134,10 +136,18 @@ exports.updateChiTiet = async (req, res) => {
         stockPromises.push(HangHoa.findOneAndUpdate({ maHangHoa: ma }, { $inc: { tonKho: -delta } }));
       }
     }
+    // Fetch giaVon cho các sản phẩm mới được thêm vào (không có trong oldChiTiet)
+    const newMas = newChiTiet
+      .filter(ct => !oldChiTiet.find(o => o.maHangHoa === ct.maHangHoa))
+      .map(ct => ct.maHangHoa);
+    const freshHH = newMas.length > 0
+      ? await HangHoa.find({ maHangHoa: { $in: newMas } }).select('maHangHoa giaVon').lean()
+      : [];
+    const giaVonMap = Object.fromEntries(freshHH.map(h => [h.maHangHoa, h.giaVon || 0]));
     const desc = describeChiTiet(oldChiTiet, newChiTiet);
     hd.chiTiet = newChiTiet.map(ct => {
       const old = oldChiTiet.find(c => c.maHangHoa === ct.maHangHoa) || {};
-      return { ...ct, soLuongDaTra: old.soLuongDaTra || 0, giaVon: old.giaVon || ct.giaVon || 0 };
+      return { ...ct, soLuongDaTra: old.soLuongDaTra || 0, giaVon: old.giaVon || giaVonMap[ct.maHangHoa] || ct.giaVon || 0 };
     });
     addLog(hd, 'Sửa chi tiết', req.user?.username, desc);
     await Promise.all([hd.save(), ...stockPromises]);

@@ -1,12 +1,12 @@
 const router = require('express').Router();
-const { protect } = require('../middleware/auth');
+const { protect, requirePermission } = require('../middleware/auth');
 const c = require('../controllers/khachHangController');
 router.use(protect);
 router.get('/',                  c.getAll);
 router.get('/:id/hoa-don',       c.getHoaDon);
 router.get('/:id/tra-hang',      c.getTraHang);
 router.get('/:id',               c.getOne);
-router.post('/',                 c.create);
-router.put('/:id',               c.update);
-router.delete('/:id',            c.remove);
+router.post('/',                 requirePermission('quan_ly_kh'), c.create);
+router.put('/:id',               requirePermission('quan_ly_kh'), c.update);
+router.delete('/:id',            requirePermission('quan_ly_kh'), c.remove);
 module.exports = router;

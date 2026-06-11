@@ -1,9 +1,13 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-const ACCESS_EXPIRES  = process.env.JWT_EXPIRES_IN    || '2h';
-const REFRESH_EXPIRES = process.env.JWT_REFRESH_EXPIRES || '30d';
-const REFRESH_SECRET  = process.env.JWT_REFRESH_SECRET || (process.env.JWT_SECRET + '_refresh');
+const ACCESS_EXPIRES  = process.env.JWT_EXPIRES_IN || '2h';
+const REFRESH_EXPIRES = process.env.JWT_REFRESH_EXPIRES_IN || process.env.JWT_REFRESH_EXPIRES || '30d';
+
+if (!process.env.JWT_REFRESH_SECRET) {
+  console.warn('[auth] CẢNH BÁO: chưa set JWT_REFRESH_SECRET trong .env — đang dùng secret suy ra từ JWT_SECRET (kém an toàn).');
+}
+const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || (process.env.JWT_SECRET + '_refresh');
 
 const generateToken        = (id) => jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: ACCESS_EXPIRES });
 const generateRefreshToken = (id) => jwt.sign({ id }, REFRESH_SECRET,          { expiresIn: REFRESH_EXPIRES });

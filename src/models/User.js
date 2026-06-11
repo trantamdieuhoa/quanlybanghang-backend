@@ -8,10 +8,13 @@ const ALL_PERMISSIONS = [
   'xoa_hoa_don',    // Xoá hoá đơn (nguy hiểm)
   'nhap_hang',      // Tạo phiếu nhập
   'xem_hang_hoa',   // Xem hàng hoá + bảng giá
+  'quan_ly_hang_hoa', // Thêm/sửa/xoá hàng hoá + bảng giá
   'quan_ly_kh',     // Thêm/sửa khách hàng
   'xem_cong_no',    // Xem công nợ
   'xem_bao_cao',    // Xem báo cáo
   'xem_thu_chi',    // Xem thu chi
+  'kiem_ke_kho',    // Tạo & áp dụng phiếu kiểm kê kho
+  'quan_ly_khuyen_mai', // Quản lý chương trình khuyến mãi
 ];
 
 const DEFAULT_NV_PERMISSIONS = ['ban_hang', 'xem_hoa_don', 'nhap_hang', 'xem_hang_hoa', 'quan_ly_kh'];
@@ -24,9 +27,6 @@ const userSchema = new mongoose.Schema({
   permissions: { type: [String], default: DEFAULT_NV_PERMISSIONS },
   trangThai: { type: String, enum: ['Hoạt động', 'Khoá'], default: 'Hoạt động' },
 }, { timestamps: true });
-
-module.exports.ALL_PERMISSIONS = ALL_PERMISSIONS;
-module.exports.DEFAULT_NV_PERMISSIONS = DEFAULT_NV_PERMISSIONS;
 
 // Hash password trước khi save
 userSchema.pre('save', async function (next) {
@@ -41,4 +41,6 @@ userSchema.methods.matchPassword = async function (enteredPassword) {
   return bcrypt.compare(enteredPassword, this.password);
 };
 
-module.exports = mongoose.model('User', userSchema);
+const User = mongoose.model('User', userSchema);
+User.ALL_PERMISSIONS = ALL_PERMISSIONS;
+User.DEFAU

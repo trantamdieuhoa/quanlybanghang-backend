@@ -41,12 +41,10 @@ exports.create = async (req, res) => {
 
     const promises = [];
     for (const ct of pn.chiTiet) {
-      promises.push(
-        HangHoa.findOneAndUpdate(
-          { maHangHoa: ct.maHangHoa },
-          { $inc: { tonKho: ct.soLuong } }
-        )
-      );
+      const update = { $inc: { tonKho: ct.soLuong } };
+      // Cập nhật giá vốn theo giá nhập mới nhất
+      if (ct.donGia > 0) update.$set = { giaVon: ct.donGia };
+      promises.push(HangHoa.findOneAndUpdate({ maHangHoa: ct.maHangHoa }, update));
     }
     if (pn.maNhaCungCap && pn.conNo > 0) {
       promises.push(

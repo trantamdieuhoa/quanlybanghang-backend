@@ -186,6 +186,13 @@ const importBangGia = async (sheets, sheetId) => {
 
 const importDanhMuc = async (sheets, sheetId) => {
   const rows = await readSheet(sheets, sheetId, 'DanhMuc');
+
+  // Guard: sheet rỗng → dừng, không xoá MongoDB
+  if (rows.length === 0) {
+    console.warn('[Sheets] DanhMuc: sheet rỗng — bỏ qua import để bảo vệ dữ liệu');
+    return 0;
+  }
+
   const validIds = [];
   for (const row of rows) {
     const [maDanhMuc, tenDanhMuc, moTa] = row;
@@ -206,6 +213,13 @@ const importDanhMuc = async (sheets, sheetId) => {
 
 const importDonViTinh = async (sheets, sheetId) => {
   const rows = await readSheet(sheets, sheetId, 'DonViTinh');
+
+  // Guard: sheet rỗng → dừng, không xoá MongoDB
+  if (rows.length === 0) {
+    console.warn('[Sheets] DonViTinh: sheet rỗng — bỏ qua import để bảo vệ dữ liệu');
+    return 0;
+  }
+
   const validNames = [];
   for (const row of rows) {
     const [tenDonVi, ghiChu] = row;

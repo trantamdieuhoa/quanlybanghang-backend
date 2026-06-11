@@ -1,10 +1,10 @@
 const router = require('express').Router();
-const { protect } = require('../middleware/auth');
+const { protect, requirePermission } = require('../middleware/auth');
 const c = require('../controllers/phieuNhapController');
 router.use(protect);
-router.get('/',    c.getAll);
-router.get('/:id', c.getOne);
-router.post('/',   c.create);
-router.put('/:id', c.update);
-router.post('/:id/payment', c.addPayment);
+router.get('/',    requirePermission('nhap_hang'), c.getAll);
+router.get('/:id', requirePermission('nhap_hang'), c.getOne);
+router.post('/',   requirePermission('nhap_hang'), c.create);
+router.put('/:id', requirePermission('nhap_hang'), c.update);
+router.post('/:id/payment', requirePermission(['nhap_hang', 'xem_cong_no']), c.addPayment);
 module.exports = router;

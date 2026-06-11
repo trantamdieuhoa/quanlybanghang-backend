@@ -1,7 +1,8 @@
 const router = require('express').Router();
-const { protect } = require('../middleware/auth');
+const { protect, requirePermission } = require('../middleware/auth');
 const c = require('../controllers/congNoController');
 router.use(protect);
+router.use(requirePermission('xem_cong_no'));
 router.get('/summary',               c.summary);
 router.get('/khach',                  c.khachNo);
 router.get('/khach/:maKhachHang/hoa-don', c.hoaDonNo);

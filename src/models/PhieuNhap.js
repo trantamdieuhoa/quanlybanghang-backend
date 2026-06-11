@@ -22,7 +22,7 @@ const PhieuNhapSchema = new mongoose.Schema({
   tongTien:      { type: Number, default: 0 },
   daThanhToan:   { type: Number, default: 0 },
   conNo:         { type: Number, default: 0 },
-  phuongThucTT:  { type: String, enum: ['Tiền mặt','Chuyển khoản','Công nợ'], default: 'Công nợ' },
+  phuongThucTT:  { type: String, enum: ['Tiền mặt','Chuyển khoản','Công nợ','QR chuyển khoản','Thẻ','Ví điện tử'], default: 'Công nợ' },
   trangThaiTT:   { type: String, enum: ['Đã thanh toán','Còn nợ','Thanh toán một phần'], default: 'Còn nợ' },
   trangThai:     { type: String, enum: ['Hoạt động','Đã huỷ'], default: 'Hoạt động' },
   ghiChu:        { type: String, default: '' },

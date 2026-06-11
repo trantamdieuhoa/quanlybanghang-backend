@@ -1,7 +1,8 @@
 const router = require('express').Router();
-const { protect } = require('../middleware/auth');
+const { protect, requirePermission } = require('../middleware/auth');
 const c = require('../controllers/thuChiController');
 router.use(protect);
+router.use(requirePermission('xem_thu_chi'));
 router.get('/',    c.getAll);
 router.post('/',   c.create);
 router.put('/:id', c.update);

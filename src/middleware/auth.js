@@ -27,4 +27,17 @@ const adminOnly = (req, res, next) => {
   res.status(403).json({ message: 'Chỉ admin mới có quyền thực hiện thao tác này' });
 };
 
-module.exports = { protect, adminOnly };
+// requirePermission('xem_cong_no') hoặc requirePermission(['ban_hang','xem_cong_no'])
+// admin luôn được bypass; nhân viên cần có ít nhất 1 permission trong danh sách
+const requirePermission = (permissions) => (req, res, next) => {
+  if (!req.user) return res.status(401).json({ message: 'Không có quyền truy cập' });
+  if (req.user.role === 'admin') return next();
+
+  const required = Array.isArray(permissions) ? permissions : [permissions];
+  const userPerms = req.user.permissions || [];
+  if (required.some((p) => userPerms.includes(p))) return next();
+
+  res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
+};
+
+module.exports = { protect, adminOnly, requirePermission };

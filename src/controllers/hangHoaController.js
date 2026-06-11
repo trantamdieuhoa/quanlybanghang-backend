@@ -6,7 +6,12 @@ exports.getAll = async (req, res) => {
     const { page = 1, limit = 50, search = '', danhMuc = '', trangThai = '',
             trangThaiKho = '', sortBy = 'ngayCapNhat', sortOrder = 'desc' } = req.query;
     const filter = {};
-    if (search) filter.tenHangHoa = { $regex: search, $options: 'i' };
+    if (search) {
+      filter.$or = [
+        { tenHangHoa: { $regex: search, $options: 'i' } },
+        { maVach: { $regex: search, $options: 'i' } },
+      ];
+    }
     if (danhMuc) filter.danhMuc = danhMuc;
     if (trangThai) filter.trangThai = trangThai;
     // Hàng cũ chưa có field coHang (null) → coi là còn hàng
@@ -45,10 +50,16 @@ exports.getOne = async (req, res) => {
 // POST /api/hang-hoa
 exports.create = async (req, res) => {
   try {
-    const item = await HangHoa.create(req.body);
+    const body = { ...req.body };
+    // maVach rỗng → bỏ field để không vi phạm sparse unique index
+    if (!body.maVach) delete body.maVach;
+    const item = await HangHoa.create(body);
     res.status(201).json(item);
   } catch (err) {
-    if (err.code === 11000) return res.status(400).json({ message: 'Mã hàng hoá đã tồn tại' });
+    if (err.code === 11000) {
+      const msg = err.keyPattern?.maVach ? 'Mã vạch đã tồn tại' : 'Mã hàng hoá đã tồn tại';
+      return res.status(400).json({ message: msg });
+    }
     res.status(500).json({ message: err.message });
   }
 };
@@ -56,12 +67,34 @@ exports.create = async (req, res) => {
 // PUT /api/hang-hoa/:id
 exports.update = async (req, res) => {
   try {
+    const body = { ...req.body, ngayCapNhat: new Date() };
+    const update = { $set: body };
+    // maVach rỗng → $unset để không vi phạm sparse unique index
+    if ('maVach' in body && !body.maVach) {
+      delete body.maVach;
+      update.$unset = { maVach: '' };
+    }
     const item = await HangHoa.findOneAndUpdate(
       { maHangHoa: req.params.id },
-      { ...req.body, ngayCapNhat: new Date() },
+      update,
       { new: true, runValidators: true }
     );
     if (!item) return res.status(404).json({ message: 'Không tìm thấy hàng hoá' });
+    res.json(item);
+  } catch (err) {
+    if (err.code === 11000) {
+      const msg = err.keyPattern?.maVach ? 'Mã vạch đã tồn tại' : 'Mã hàng hoá đã tồn tại';
+      return res.status(400).json({ message: msg });
+    }
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// GET /api/hang-hoa/barcode/:maVach — tra cứu nhanh khi bán hàng (scan mã vạch)
+exports.getByBarcode = async (req, res) => {
+  try {
+    const item = await HangHoa.findOne({ maVach: req.params.maVach, trangThai: 'Hoạt động' });
+    if (!item) return res.status(404).json({ message: 'Không tìm thấy hàng hoá với mã vạch này' });
     res.json(item);
   } catch (err) {
     res.status(500).json({ message: err.message });

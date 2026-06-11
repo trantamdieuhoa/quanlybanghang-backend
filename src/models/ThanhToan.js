@@ -16,7 +16,7 @@ const ThanhToanSchema = new mongoose.Schema({
   maNhaCungCap:  { type: String, default: '' },
   tenNhaCungCap: { type: String, default: '' },
   soTien:        { type: Number, required: true, min: 0 },
-  phuongThuc:    { type: String, enum: ['Tiền mặt','Chuyển khoản'], default: 'Tiền mặt' },
+  phuongThuc:    { type: String, enum: ['Tiền mặt','Chuyển khoản','QR chuyển khoản','Thẻ','Ví điện tử'], default: 'Tiền mặt' },
   ghiChu:        { type: String, default: '' },
   ngayThanhToan: { type: Date, default: Date.now },
   nguoiTao:      { type: String, default: '' },

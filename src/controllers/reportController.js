@@ -128,7 +128,7 @@ exports.daily = async (req, res) => {
         .lean(),
       PhieuNhap.find({ ngayNhap: { $gte: start, $lte: end } })
         .select('tongTien').lean(),
-      ThuChi.find({ ngayGiaoDich: { $gte: start, $lte: end } })
+      ThuChi.find({ ngayThuChi: { $gte: start, $lte: end } })
         .select('loai soTien').lean(),
       KhachHang.countDocuments({ createdAt: { $gte: start, $lte: end } }),
     ]);
@@ -220,6 +220,38 @@ exports.monthly = async (req, res) => {
       byDay,
       topProducts,
     });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// GET /api/reports/cong-no-qua-han?soNgay=7 — hoá đơn còn nợ quá X ngày kể từ ngày bán
+exports.congNoQuaHan = async (req, res) => {
+  try {
+    const soNgay = parseInt(req.query.soNgay, 10) || 7;
+    const nguong = new Date();
+    nguong.setDate(nguong.getDate() - soNgay);
+    nguong.setHours(23, 59, 59, 999);
+
+    const hoaDons = await HoaDon.find({
+      trangThai: HD,
+      trangThaiTT: { $ne: 'Đã thanh toán' },
+      conNo: { $gt: 0 },
+      ngayBan: { $lte: nguong },
+    })
+      .select('maHoaDon maKhachHang tenKhachHang ngayBan conNo trangThaiTT')
+      .sort({ ngayBan: 1 })
+      .lean();
+
+    const now = Date.now();
+    const data = hoaDons.map((h) => ({
+      ...h,
+      soNgayNo: Math.floor((now - new Date(h.ngayBan).getTime()) / 86400000),
+    }));
+
+    const tongCongNoQuaHan = data.reduce((s, h) => s + (h.conNo || 0), 0);
+
+    res.json({ data, tongCongNoQuaHan, soHoaDon: data.length, soNgay });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

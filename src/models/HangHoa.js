@@ -10,6 +10,13 @@ const hangHoaSchema = new mongoose.Schema({
     // Format: HH + random 8 chars (ví dụ: HHMPCGWJAL)
   },
   tenHangHoa: { type: String, required: true, trim: true },
+  // Không set default '' — để field "absent" khi chưa nhập, tránh vi phạm
+  // unique index (sparse chỉ bỏ qua field absent/null, không bỏ qua chuỗi rỗng)
+  maVach: {
+    type: String,
+    trim: true,
+    index: { unique: true, sparse: true },
+  },
   donViNhoNhat: { type: String, default: '' },
   danhMuc: {
     type: String,
