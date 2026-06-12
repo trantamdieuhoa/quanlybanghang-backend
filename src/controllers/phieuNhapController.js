@@ -1,6 +1,15 @@
 const PhieuNhap  = require('../models/PhieuNhap');
 const NhaCungCap = require('../models/NhaCungCap');
 const HangHoa    = require('../models/HangHoa');
+const BienThe    = require('../models/BienThe');
+const { syncTonKho } = require('./bienTheController');
+
+// Chuẩn hoá về 00:00:00 UTC của ngày — dùng để gộp lô cùng ngày HSD
+const normalizeDate = (d) => {
+  const date = new Date(d);
+  date.setUTCHours(0, 0, 0, 0);
+  return date;
+};
 
 exports.getAll = async (req, res) => {
   try {
@@ -40,11 +49,37 @@ exports.create = async (req, res) => {
     await pn.save();
 
     const promises = [];
+    const affectedBienTheHH = new Set();
     for (const ct of pn.chiTiet) {
-      const update = { $inc: { tonKho: ct.soLuong } };
-      // Cập nhật giá vốn theo giá nhập mới nhất
-      if (ct.donGia > 0) update.$set = { giaVon: ct.donGia };
-      promises.push(HangHoa.findOneAndUpdate({ maHangHoa: ct.maHangHoa }, update));
+      if (ct.maBienThe) {
+        // Biến thể (size/màu...) — cộng tonKho + giaVon trên BienThe, đồng bộ lại HangHoa.tonKho sau
+        const btUpdate = { $inc: { tonKho: ct.soLuong } };
+        if (ct.donGia > 0) btUpdate.$set = { giaVon: ct.donGia };
+        promises.push(BienThe.findOneAndUpdate({ maBienThe: ct.maBienThe }, btUpdate));
+        affectedBienTheHH.add(ct.maHangHoa);
+      } else {
+        const update = { $inc: { tonKho: ct.soLuong } };
+        // Cập nhật giá vốn theo giá nhập mới nhất
+        if (ct.donGia > 0) update.$set = { giaVon: ct.donGia };
+        promises.push(HangHoa.findOneAndUpdate({ maHangHoa: ct.maHangHoa }, update));
+      }
+
+      // Lô hàng theo HSD (optional) — gộp vào lô cùng ngày HSD nếu đã có, ngược lại tạo lô mới
+      if (ct.hanSuDung) {
+        const hsd = normalizeDate(ct.hanSuDung);
+        promises.push((async () => {
+          const merged = await HangHoa.findOneAndUpdate(
+            { maHangHoa: ct.maHangHoa, 'lo.hanSuDung': hsd },
+            { $inc: { 'lo.$.soLuong': ct.soLuong } }
+          );
+          if (!merged) {
+            await HangHoa.findOneAndUpdate(
+              { maHangHoa: ct.maHangHoa },
+              { $push: { lo: { hanSuDung: hsd, soLuong: ct.soLuong, ngayNhap: new Date(), maPhieuNhap: pn.maPhieuNhap } } }
+            );
+          }
+        })());
+      }
     }
     if (pn.maNhaCungCap && pn.conNo > 0) {
       promises.push(
@@ -55,6 +90,7 @@ exports.create = async (req, res) => {
       );
     }
     await Promise.all(promises);
+    for (const maHangHoa of affectedBienTheHH) await syncTonKho(maHangHoa);
 
     res.status(201).json(pn);
   } catch (err) { res.status(400).json({ message: err.message }); }

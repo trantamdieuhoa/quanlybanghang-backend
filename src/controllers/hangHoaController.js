@@ -1,4 +1,5 @@
 const HangHoa = require('../models/HangHoa');
+const BienThe = require('../models/BienThe');
 
 // GET /api/hang-hoa?page=1&limit=50&search=&danhMuc=&sortBy=ngayCapNhat&sortOrder=desc
 exports.getAll = async (req, res) => {
@@ -91,10 +92,32 @@ exports.update = async (req, res) => {
 };
 
 // GET /api/hang-hoa/barcode/:maVach — tra cứu nhanh khi bán hàng (scan mã vạch)
+// Ưu tiên tìm trong BienThe.maVach trước (hàng có biến thể), fallback HangHoa.maVach
 exports.getByBarcode = async (req, res) => {
   try {
+    const bt = await BienThe.findOne({ maVach: req.params.maVach, trangThai: 'Hoạt động' });
+    if (bt) {
+      const item = await HangHoa.findOne({ maHangHoa: bt.maHangHoa, trangThai: 'Hoạt động' });
+      if (!item) return res.status(404).json({ message: 'Không tìm thấy hàng hoá với mã vạch này' });
+      return res.json({ ...item.toObject(), bienThe: bt });
+    }
     const item = await HangHoa.findOne({ maVach: req.params.maVach, trangThai: 'Hoạt động' });
     if (!item) return res.status(404).json({ message: 'Không tìm thấy hàng hoá với mã vạch này' });
+    res.json(item);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// DELETE /api/hang-hoa/:id/lo/:loId — xoá 1 lô hàng (đã bán hết / xử lý xong) khỏi danh sách cảnh báo HSD
+exports.removeLo = async (req, res) => {
+  try {
+    const item = await HangHoa.findOneAndUpdate(
+      { maHangHoa: req.params.id },
+      { $pull: { lo: { _id: req.params.loId } } },
+      { new: true }
+    );
+    if (!item) return res.status(404).json({ message: 'Không tìm thấy hàng hoá' });
     res.json(item);
   } catch (err) {
     res.status(500).json({ message: err.message });

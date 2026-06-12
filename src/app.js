@@ -26,6 +26,8 @@ const congNoRoutes    = require('./routes/congNo');
 const lichSuRoutes    = require('./routes/lichSu');
 const phieuKiemKeRoutes = require('./routes/phieuKiemKe');
 const khuyenMaiRoutes = require('./routes/khuyenMai');
+const comboRoutes     = require('./routes/combo');
+const bienTheRoutes   = require('./routes/bienThe');
 
 const app = express();
 connectDB();
@@ -62,6 +64,8 @@ app.use('/api/cong-no',      congNoRoutes);
 app.use('/api/lich-su',      lichSuRoutes);
 app.use('/api/phieu-kiem-ke', phieuKiemKeRoutes);
 app.use('/api/khuyen-mai',   khuyenMaiRoutes);
+app.use('/api/combo',        comboRoutes);
+app.use('/api/bien-the',      bienTheRoutes);
 
 // 404
 app.use((req, res) => res.status(404).json({ message: 'Route not found' }));
@@ -88,4 +92,8 @@ app.listen(PORT, '0.0.0.0', async () => {
     // Auto-sync cron đã TẮT — chỉ sync thủ công hoặc khi mở/tắt app
     // sheetsSync.startAutoSync();
   } else {
-  
+    console.log('[Sheets] Google Sheets not configured, skipping sync');
+  }
+});
+
+module.exports = app;

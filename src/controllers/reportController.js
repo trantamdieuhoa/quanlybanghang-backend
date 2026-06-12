@@ -257,6 +257,46 @@ exports.congNoQuaHan = async (req, res) => {
   }
 };
 
+// GET /api/reports/can-het-han?soNgay=30 — lô hàng cận/quá hạn sử dụng (mặc định 30 ngày)
+exports.hangCanHetHan = async (req, res) => {
+  try {
+    const soNgay = parseInt(req.query.soNgay, 10) || 30;
+    const nguong = new Date();
+    nguong.setDate(nguong.getDate() + soNgay);
+    nguong.setHours(23, 59, 59, 999);
+
+    const hangHoas = await HangHoa.find({
+      trangThai: HD,
+      lo: { $elemMatch: { hanSuDung: { $lte: nguong }, soLuong: { $gt: 0 } } },
+    }, 'maHangHoa tenHangHoa donViNhoNhat lo').lean();
+
+    const now = Date.now();
+    const data = [];
+    for (const h of hangHoas) {
+      for (const l of h.lo || []) {
+        if (!l.soLuong || l.soLuong <= 0) continue;
+        const hsd = new Date(l.hanSuDung).getTime();
+        if (hsd > nguong.getTime()) continue;
+        data.push({
+          maHangHoa: h.maHangHoa,
+          tenHangHoa: h.tenHangHoa,
+          donViNhoNhat: h.donViNhoNhat,
+          loId: l._id,
+          hanSuDung: l.hanSuDung,
+          soLuong: l.soLuong,
+          soNgayConLai: Math.ceil((hsd - now) / 86400000),
+          quaHan: hsd < now,
+        });
+      }
+    }
+    data.sort((a, b) => new Date(a.hanSuDung) - new Date(b.hanSuDung));
+
+    res.json({ data, soLuongCanhBao: data.length, soNgay });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
 // GET /api/reports/weekly — doanh thu + lợi nhuận 7 ngày gần nhất
 exports.weekly = async (req, res) => {
   try {

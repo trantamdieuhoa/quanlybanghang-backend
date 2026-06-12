@@ -7,6 +7,14 @@ const LichSuSchema = new mongoose.Schema({
   chiTiet:         { type: String, default: '' },
 }, { _id: false });
 
+// Snapshot thành phần combo lúc bán — dùng để trừ/hoàn tồn kho và tính giaVon combo
+const ComboThanhPhanSchema = new mongoose.Schema({
+  maHangHoa:  { type: String, required: true },
+  tenHangHoa: { type: String, default: '' },
+  soLuong:    { type: Number, required: true, min: 0 }, // số lượng tiêu thụ / 1 combo
+  giaVon:     { type: Number, default: 0 },
+}, { _id: false });
+
 const ChiTietSchema = new mongoose.Schema({
   maHangHoa:    { type: String, required: true },
   tenHangHoa:   { type: String, required: true },
@@ -18,6 +26,12 @@ const ChiTietSchema = new mongoose.Schema({
   giamGia:      { type: Number, default: 0, min: 0 },
   thanhTien:    { type: Number, default: 0 },
   soLuongDaTra: { type: Number, default: 0 },
+  // Combo: nếu dòng này là combo, maCombo khác '' và comboThanhPhan chứa snapshot thành phần
+  maCombo:        { type: String, default: '' },
+  comboThanhPhan: { type: [ComboThanhPhanSchema], default: [] },
+  // Biến thể (size/màu...) — nếu có, trừ/hoàn tonKho trên BienThe.tonKho thay vì HangHoa.tonKho
+  maBienThe:  { type: String, default: '' },
+  tenBienThe: { type: String, default: '' },
 }, { _id: true });
 
 ChiTietSchema.pre('save', function(next) {

@@ -1,6 +1,8 @@
 const HoaDon    = require('../models/HoaDon');
 const KhachHang = require('../models/KhachHang');
 const HangHoa   = require('../models/HangHoa');
+const BienThe   = require('../models/BienThe');
+const { syncTonKho } = require('./bienTheController');
 
 // Helper ghi log vào document (chưa save)
 const addLog = (hd, hanhDong, nguoi, chiTiet = '') => {
@@ -12,15 +14,56 @@ const addLog = (hd, hanhDong, nguoi, chiTiet = '') => {
   });
 };
 
-// Mô tả thay đổi chi tiết
+// "Nổ" danh sách chiTiet thành 2 map thay đổi tồn kho:
+// - hangHoaMap: { maHangHoa: soLuong } — áp dụng lên HangHoa.tonKho (dòng thường + thành phần combo)
+// - bienTheMap: { maBienThe: { maHangHoa, qty } } — áp dụng lên BienThe.tonKho (dòng có chọn biến thể)
+const expandStockChanges = (chiTiet) => {
+  const hangHoaMap = {};
+  const bienTheMap = {};
+  for (const ct of chiTiet) {
+    if (ct.maCombo && Array.isArray(ct.comboThanhPhan) && ct.comboThanhPhan.length > 0) {
+      for (const tp of ct.comboThanhPhan) {
+        hangHoaMap[tp.maHangHoa] = (hangHoaMap[tp.maHangHoa] || 0) + tp.soLuong * ct.soLuong;
+      }
+    } else if (ct.maBienThe) {
+      if (!bienTheMap[ct.maBienThe]) bienTheMap[ct.maBienThe] = { maHangHoa: ct.maHangHoa, qty: 0 };
+      bienTheMap[ct.maBienThe].qty += ct.soLuong;
+    } else {
+      hangHoaMap[ct.maHangHoa] = (hangHoaMap[ct.maHangHoa] || 0) + ct.soLuong;
+    }
+  }
+  return { hangHoaMap, bienTheMap };
+};
+
+// Áp dụng thay đổi tồn kho: sign = -1 khi bán (trừ kho), +1 khi hoàn (huỷ/xoá đơn)
+// Trả về danh sách maHangHoa bị ảnh hưởng (để check coHang)
+const applyStockChanges = async ({ hangHoaMap, bienTheMap }, sign) => {
+  const promises = [];
+  for (const [ma, qty] of Object.entries(hangHoaMap)) {
+    if (qty !== 0) promises.push(HangHoa.findOneAndUpdate({ maHangHoa: ma }, { $inc: { tonKho: sign * qty } }));
+  }
+  const affectedHH = new Set();
+  for (const [maBT, info] of Object.entries(bienTheMap)) {
+    if (info.qty !== 0) {
+      promises.push(BienThe.findOneAndUpdate({ maBienThe: maBT }, { $inc: { tonKho: sign * info.qty } }));
+      affectedHH.add(info.maHangHoa);
+    }
+  }
+  await Promise.all(promises);
+  for (const ma of affectedHH) await syncTonKho(ma);
+  return [...Object.keys(hangHoaMap), ...affectedHH];
+};
+
+// Mô tả thay đổi chi tiết (so sánh theo maBienThe nếu có, ngược lại maHangHoa)
 const describeChiTiet = (oldList, newList) => {
-  const oldMap = Object.fromEntries(oldList.map(c => [c.maHangHoa, c]));
-  const newMap = Object.fromEntries(newList.map(c => [c.maHangHoa, c]));
-  const allMa  = new Set([...oldList.map(c => c.maHangHoa), ...newList.map(c => c.maHangHoa)]);
+  const key = (c) => c.maBienThe || c.maHangHoa;
+  const oldMap = Object.fromEntries(oldList.map(c => [key(c), c]));
+  const newMap = Object.fromEntries(newList.map(c => [key(c), c]));
+  const allKeys = new Set([...oldList.map(key), ...newList.map(key)]);
   const parts  = [];
-  for (const ma of allMa) {
-    const o = oldMap[ma]; const n = newMap[ma];
-    const ten = (n || o).tenHangHoa || ma;
+  for (const k of allKeys) {
+    const o = oldMap[k]; const n = newMap[k];
+    const ten = (n || o).tenHangHoa || k;
     if (!o)                             parts.push(`Thêm ${ten} (×${n.soLuong})`);
     else if (!n)                        parts.push(`Xoá ${ten}`);
     else if (o.soLuong !== n.soLuong)   parts.push(`${ten}: ${o.soLuong}→${n.soLuong}`);
@@ -65,32 +108,62 @@ exports.create = async (req, res) => {
   try {
     const body = { ...req.body, nguoiTao: req.user?.username };
     if (Array.isArray(body.chiTiet) && body.chiTiet.length > 0) {
-      const maCodes = [...new Set(body.chiTiet.map((c) => c.maHangHoa))];
-      const hangHoas = await HangHoa.find({ maHangHoa: { $in: maCodes } })
-        .select('maHangHoa giaVon tonKho').lean();
-      const giaVonMap = Object.fromEntries(hangHoas.map((h) => [h.maHangHoa, h.giaVon || 0]));
-      body.chiTiet = body.chiTiet.map((c) => ({ ...c, giaVon: giaVonMap[c.maHangHoa] ?? 0 }));
+      // Thu thập mã hàng/biến thể cần lấy giaVon: dòng thường + thành phần combo + biến thể
+      const maCodes = new Set();
+      const btCodes = new Set();
+      body.chiTiet.forEach((c) => {
+        if (c.maCombo && Array.isArray(c.comboThanhPhan) && c.comboThanhPhan.length > 0) {
+          c.comboThanhPhan.forEach((tp) => maCodes.add(tp.maHangHoa));
+        } else if (c.maBienThe) {
+          btCodes.add(c.maBienThe);
+          maCodes.add(c.maHangHoa);
+        } else {
+          maCodes.add(c.maHangHoa);
+        }
+      });
+      const [hangHoas, bienThes] = await Promise.all([
+        HangHoa.find({ maHangHoa: { $in: [...maCodes] } }).select('maHangHoa giaVon tonKho').lean(),
+        btCodes.size > 0
+          ? BienThe.find({ maBienThe: { $in: [...btCodes] } }).select('maBienThe giaVon tenBienThe').lean()
+          : [],
+      ]);
+      const giaVonMap   = Object.fromEntries(hangHoas.map((h) => [h.maHangHoa, h.giaVon || 0]));
+      const btGiaVonMap = Object.fromEntries(bienThes.map((b) => [b.maBienThe, b.giaVon || 0]));
+      const btTenMap    = Object.fromEntries(bienThes.map((b) => [b.maBienThe, b.tenBienThe || '']));
+      body.chiTiet = body.chiTiet.map((c) => {
+        if (c.maCombo && Array.isArray(c.comboThanhPhan) && c.comboThanhPhan.length > 0) {
+          const comboThanhPhan = c.comboThanhPhan.map((tp) => ({ ...tp, giaVon: giaVonMap[tp.maHangHoa] ?? 0 }));
+          const giaVon = comboThanhPhan.reduce((s, tp) => s + tp.giaVon * tp.soLuong, 0);
+          return { ...c, comboThanhPhan, giaVon };
+        }
+        if (c.maBienThe) {
+          return {
+            ...c,
+            giaVon: btGiaVonMap[c.maBienThe] ?? giaVonMap[c.maHangHoa] ?? 0,
+            tenBienThe: c.tenBienThe || btTenMap[c.maBienThe] || '',
+          };
+        }
+        return { ...c, giaVon: giaVonMap[c.maHangHoa] ?? 0 };
+      });
     }
     const hd = new HoaDon(body);
     addLog(hd, 'Tạo hoá đơn', req.user?.username,
       `${hd.chiTiet.length} sản phẩm • KH: ${hd.tenKhachHang}`);
     await hd.save();
-    const promises = [];
-    for (const ct of hd.chiTiet) {
-      promises.push(HangHoa.findOneAndUpdate({ maHangHoa: ct.maHangHoa }, { $inc: { tonKho: -ct.soLuong } }));
-    }
+
+    const stockChanges = expandStockChanges(hd.chiTiet);
+    const affectedCodes = await applyStockChanges(stockChanges, -1);
+
     if (hd.maKhachHang) {
-      promises.push(KhachHang.findOneAndUpdate(
+      await KhachHang.findOneAndUpdate(
         { maKhachHang: hd.maKhachHang },
         { $inc: { tongCongNo: hd.conNo > 0 ? hd.conNo : 0, tongMuaHang: hd.tongThanhToan } }
-      ));
+      );
     }
-    await Promise.all(promises);
 
-    // Tự động đánh dấu hết hàng cho các SP vừa bán mà tonKho về <= 0
-    const maCodesInOrder = [...new Set(hd.chiTiet.map((c) => c.maHangHoa))];
+    // Tự động đánh dấu hết hàng cho các SP vừa bán (kể cả thành phần combo + biến thể) mà tonKho về <= 0
     await HangHoa.updateMany(
-      { maHangHoa: { $in: maCodesInOrder }, tonKho: { $lte: 0 }, coHang: { $ne: false } },
+      { maHangHoa: { $in: [...new Set(affectedCodes)] }, tonKho: { $lte: 0 }, coHang: { $ne: false } },
       { $set: { coHang: false } }
     );
 
@@ -123,34 +196,88 @@ exports.updateChiTiet = async (req, res) => {
     if (!hd) return res.status(404).json({ message: 'Khong tim thay hoa don' });
     const oldChiTiet = hd.chiTiet;
     const newChiTiet = req.body.chiTiet || [];
-    const allMa = new Set([
-      ...oldChiTiet.map(c => c.maHangHoa),
-      ...newChiTiet.map(c => c.maHangHoa),
+
+    // Khoá so sánh: maBienThe nếu có, ngược lại maHangHoa
+    const lineKey = (c) => c.maBienThe || c.maHangHoa;
+    const oldKeys = new Set(oldChiTiet.map(lineKey));
+
+    // Fetch giaVon cho: (1) dòng thường/biến thể mới thêm, (2) thành phần combo chưa có giaVon
+    const maCodesNeedGiaVon = new Set();
+    const btCodesNeedGiaVon = new Set();
+    newChiTiet.forEach((ct) => {
+      if (ct.maCombo && Array.isArray(ct.comboThanhPhan) && ct.comboThanhPhan.length > 0) {
+        ct.comboThanhPhan.forEach((tp) => {
+          if (tp.giaVon === undefined || tp.giaVon === null) maCodesNeedGiaVon.add(tp.maHangHoa);
+        });
+      } else if (!oldKeys.has(lineKey(ct))) {
+        if (ct.maBienThe) btCodesNeedGiaVon.add(ct.maBienThe);
+        else maCodesNeedGiaVon.add(ct.maHangHoa);
+      }
+    });
+    const [freshHH, freshBT] = await Promise.all([
+      maCodesNeedGiaVon.size > 0
+        ? HangHoa.find({ maHangHoa: { $in: [...maCodesNeedGiaVon] } }).select('maHangHoa giaVon').lean()
+        : [],
+      btCodesNeedGiaVon.size > 0
+        ? BienThe.find({ maBienThe: { $in: [...btCodesNeedGiaVon] } }).select('maBienThe giaVon tenBienThe').lean()
+        : [],
     ]);
+    const giaVonMap   = Object.fromEntries(freshHH.map(h => [h.maHangHoa, h.giaVon || 0]));
+    const btGiaVonMap = Object.fromEntries(freshBT.map(b => [b.maBienThe, b.giaVon || 0]));
+    const btTenMap    = Object.fromEntries(freshBT.map(b => [b.maBienThe, b.tenBienThe || '']));
+
+    const desc = describeChiTiet(oldChiTiet, newChiTiet);
+    hd.chiTiet = newChiTiet.map(ct => {
+      const old = oldChiTiet.find(c => lineKey(c) === lineKey(ct)) || {};
+      if (ct.maCombo && Array.isArray(ct.comboThanhPhan) && ct.comboThanhPhan.length > 0) {
+        const comboThanhPhan = ct.comboThanhPhan.map(tp => ({
+          ...tp,
+          giaVon: (tp.giaVon !== undefined && tp.giaVon !== null) ? tp.giaVon : (giaVonMap[tp.maHangHoa] ?? 0),
+        }));
+        const giaVon = comboThanhPhan.reduce((s, tp) => s + tp.giaVon * tp.soLuong, 0);
+        return { ...ct, soLuongDaTra: old.soLuongDaTra || 0, comboThanhPhan, giaVon };
+      }
+      if (ct.maBienThe) {
+        const giaVon = old.giaVon || btGiaVonMap[ct.maBienThe] || giaVonMap[ct.maHangHoa] || ct.giaVon || 0;
+        return {
+          ...ct,
+          soLuongDaTra: old.soLuongDaTra || 0,
+          giaVon,
+          tenBienThe: ct.tenBienThe || old.tenBienThe || btTenMap[ct.maBienThe] || '',
+        };
+      }
+      return { ...ct, soLuongDaTra: old.soLuongDaTra || 0, giaVon: old.giaVon || giaVonMap[ct.maHangHoa] || ct.giaVon || 0 };
+    });
+
+    // Tính delta tồn kho (đã "nổ" combo thành thành phần, biến thể tách riêng theo maBienThe)
+    const oldExpand = expandStockChanges(oldChiTiet);
+    const newExpand = expandStockChanges(hd.chiTiet);
     const stockPromises = [];
-    for (const ma of allMa) {
-      const oldQty = (oldChiTiet.find(c => c.maHangHoa === ma) || {}).soLuong || 0;
-      const newQty = (newChiTiet.find(c => c.maHangHoa === ma) || {}).soLuong || 0;
-      const delta = newQty - oldQty;
+
+    const allMaHH = new Set([...Object.keys(oldExpand.hangHoaMap), ...Object.keys(newExpand.hangHoaMap)]);
+    for (const ma of allMaHH) {
+      const delta = (newExpand.hangHoaMap[ma] || 0) - (oldExpand.hangHoaMap[ma] || 0);
       if (delta !== 0) {
         stockPromises.push(HangHoa.findOneAndUpdate({ maHangHoa: ma }, { $inc: { tonKho: -delta } }));
       }
     }
-    // Fetch giaVon cho các sản phẩm mới được thêm vào (không có trong oldChiTiet)
-    const newMas = newChiTiet
-      .filter(ct => !oldChiTiet.find(o => o.maHangHoa === ct.maHangHoa))
-      .map(ct => ct.maHangHoa);
-    const freshHH = newMas.length > 0
-      ? await HangHoa.find({ maHangHoa: { $in: newMas } }).select('maHangHoa giaVon').lean()
-      : [];
-    const giaVonMap = Object.fromEntries(freshHH.map(h => [h.maHangHoa, h.giaVon || 0]));
-    const desc = describeChiTiet(oldChiTiet, newChiTiet);
-    hd.chiTiet = newChiTiet.map(ct => {
-      const old = oldChiTiet.find(c => c.maHangHoa === ct.maHangHoa) || {};
-      return { ...ct, soLuongDaTra: old.soLuongDaTra || 0, giaVon: old.giaVon || giaVonMap[ct.maHangHoa] || ct.giaVon || 0 };
-    });
+
+    const affectedHH = new Set();
+    const allBT = new Set([...Object.keys(oldExpand.bienTheMap), ...Object.keys(newExpand.bienTheMap)]);
+    for (const maBT of allBT) {
+      const oldQty = oldExpand.bienTheMap[maBT]?.qty || 0;
+      const newQty = newExpand.bienTheMap[maBT]?.qty || 0;
+      const delta = newQty - oldQty;
+      if (delta !== 0) {
+        const maHH = (newExpand.bienTheMap[maBT] || oldExpand.bienTheMap[maBT]).maHangHoa;
+        stockPromises.push(BienThe.findOneAndUpdate({ maBienThe: maBT }, { $inc: { tonKho: -delta } }));
+        affectedHH.add(maHH);
+      }
+    }
+
     addLog(hd, 'Sửa chi tiết', req.user?.username, desc);
     await Promise.all([hd.save(), ...stockPromises]);
+    for (const ma of affectedHH) await syncTonKho(ma);
     res.json(hd);
   } catch (err) { res.status(400).json({ message: err.message }); }
 };
@@ -159,11 +286,8 @@ exports.cancel = async (req, res) => {
   try {
     const hd = await HoaDon.findOne({ maHoaDon: req.params.id });
     if (!hd) return res.status(404).json({ message: 'Khong tim thay hoa don' });
-    // Hoàn lại tồn kho
-    const stockPromises = hd.chiTiet.map((ct) =>
-      HangHoa.findOneAndUpdate({ maHangHoa: ct.maHangHoa }, { $inc: { tonKho: ct.soLuong } })
-    );
-    await Promise.all(stockPromises);
+    // Hoàn lại tồn kho (kể cả thành phần combo + biến thể)
+    await applyStockChanges(expandStockChanges(hd.chiTiet), 1);
     // Hoàn lại thống kê khách hàng (cả đơn đã TT đủ lẫn còn nợ)
     if (hd.maKhachHang) {
       await KhachHang.findOneAndUpdate(
@@ -183,11 +307,8 @@ exports.deleteForce = async (req, res) => {
   try {
     const hd = await HoaDon.findOne({ maHoaDon: req.params.id });
     if (!hd) return res.status(404).json({ message: 'Không tìm thấy hoá đơn' });
-    // Hoàn lại tồn kho
-    const stockPromises = hd.chiTiet.map((ct) =>
-      HangHoa.findOneAndUpdate({ maHangHoa: ct.maHangHoa }, { $inc: { tonKho: ct.soLuong } })
-    );
-    await Promise.all(stockPromises);
+    // Hoàn lại tồn kho (kể cả thành phần combo + biến thể)
+    await applyStockChanges(expandStockChanges(hd.chiTiet), 1);
     // Hoàn lại thống kê khách hàng
     if (hd.maKhachHang) {
       await KhachHang.findOneAndUpdate(

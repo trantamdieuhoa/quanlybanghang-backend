@@ -14,6 +14,8 @@ const bangGiaSchema = new mongoose.Schema({
     ref: 'HangHoa',
   },
   tenHangHoa: { type: String, default: '' },   // denormalized for quick read
+  // Khi HangHoa.coBienThe = true, mỗi dòng giá gắn với 1 biến thể cụ thể (size/màu...)
+  maBienThe: { type: String, default: '', ref: 'BienThe' },
   quyCachBan: { type: String, required: true, trim: true },  // chai, gói, thùng, lốc 6 chai...
   soLuongQuyDoi: { type: Number, required: true, min: 1 }, // 1, 6, 24...
   donViQuyCach: { type: String, required: true, trim: true },

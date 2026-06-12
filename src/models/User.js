@@ -43,4 +43,6 @@ userSchema.methods.matchPassword = async function (enteredPassword) {
 
 const User = mongoose.model('User', userSchema);
 User.ALL_PERMISSIONS = ALL_PERMISSIONS;
-User.DEFAU
+User.DEFAULT_NV_PERMISSIONS = DEFAULT_NV_PERMISSIONS;
+
+module.exports = User;

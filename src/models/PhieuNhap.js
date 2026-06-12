@@ -8,6 +8,11 @@ const ChiTietNhapSchema = new mongoose.Schema({
   donGia:       { type: Number, required: true, min: 0 },
   thanhTien:    { type: Number, default: 0 },
   soLuongDaTra: { type: Number, default: 0 },
+  // Hạn sử dụng của lô hàng này (optional) — dùng tạo/gộp lô trong HangHoa.lo
+  hanSuDung:    { type: Date, default: null },
+  // Biến thể (size/màu...) — nếu có, cộng tonKho/giaVon vào BienThe thay vì HangHoa
+  maBienThe:  { type: String, default: '' },
+  tenBienThe: { type: String, default: '' },
 }, { _id: true });
 
 const PhieuNhapSchema = new mongoose.Schema({

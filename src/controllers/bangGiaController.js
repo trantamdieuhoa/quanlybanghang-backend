@@ -1,14 +1,15 @@
 const BangGia = require('../models/BangGia');
 const HangHoa = require('../models/HangHoa');
 
-// GET /api/bang-gia?maHangHoa=HH...
+// GET /api/bang-gia?maHangHoa=HH...&maBienThe=BT...
 exports.getAll = async (req, res) => {
   try {
-    const { maHangHoa, trangThai } = req.query;
+    const { maHangHoa, maBienThe, trangThai } = req.query;
     const filter = { trangThai: trangThai || 'Hoạt động' };
     if (maHangHoa) filter.maHangHoa = maHangHoa;
+    if (maBienThe) filter.maBienThe = maBienThe;
 
-    const data = await BangGia.find(filter).sort({ maHangHoa: 1, soLuongQuyDoi: 1 });
+    const data = await BangGia.find(filter).sort({ maHangHoa: 1, maBienThe: 1, soLuongQuyDoi: 1 });
     res.json(data);
   } catch (err) {
     res.status(500).json({ message: err.message });
