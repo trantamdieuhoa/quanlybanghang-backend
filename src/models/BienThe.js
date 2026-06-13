@@ -18,6 +18,8 @@ const bienTheSchema = new mongoose.Schema({
     trim: true,
     index: { unique: true, sparse: true },
   },
+  // Danh sách mã vạch phụ — xem ghi chú trong models/HangHoa.js
+  dsMaVach: { type: [String], default: [], index: true },
   tonKho: { type: Number, default: 0 },
   giaVon: { type: Number, default: 0 },
   trangThai: {

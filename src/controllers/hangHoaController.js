@@ -1,5 +1,6 @@
 const HangHoa = require('../models/HangHoa');
 const BienThe = require('../models/BienThe');
+const { normalizeDsMaVach, collectAllMaVach, findTrungMaVach, trungMaVachMessage } = require('../utils/maVachUtils');
 
 // GET /api/hang-hoa?page=1&limit=50&search=&danhMuc=&sortBy=ngayCapNhat&sortOrder=desc
 exports.getAll = async (req, res) => {
@@ -54,6 +55,13 @@ exports.create = async (req, res) => {
     const body = { ...req.body };
     // maVach rỗng → bỏ field để không vi phạm sparse unique index
     if (!body.maVach) delete body.maVach;
+    if ('dsMaVach' in body) body.dsMaVach = normalizeDsMaVach(body.dsMaVach);
+
+    // 1 mã vạch chỉ thuộc 1 mặt hàng/biến thể — kiểm tra trùng toàn hệ thống
+    const allMaVach = collectAllMaVach(body.maVach, body.dsMaVach);
+    const trung = await findTrungMaVach(allMaVach);
+    if (trung) return res.status(400).json({ message: trungMaVachMessage(trung) });
+
     const item = await HangHoa.create(body);
     res.status(201).json(item);
   } catch (err) {
@@ -69,6 +77,19 @@ exports.create = async (req, res) => {
 exports.update = async (req, res) => {
   try {
     const body = { ...req.body, ngayCapNhat: new Date() };
+    if ('dsMaVach' in body) body.dsMaVach = normalizeDsMaVach(body.dsMaVach);
+
+    // 1 mã vạch chỉ thuộc 1 mặt hàng/biến thể — kiểm tra trùng toàn hệ thống
+    // (gộp với dữ liệu hiện có nếu request không gửi field đó)
+    if ('maVach' in body || 'dsMaVach' in body) {
+      const existing = await HangHoa.findOne({ maHangHoa: req.params.id }).select('maVach dsMaVach').lean();
+      const maVach = 'maVach' in body ? body.maVach : existing?.maVach;
+      const dsMaVach = 'dsMaVach' in body ? body.dsMaVach : existing?.dsMaVach;
+      const allMaVach = collectAllMaVach(maVach, dsMaVach);
+      const trung = await findTrungMaVach(allMaVach, { excludeMaHangHoa: req.params.id });
+      if (trung) return res.status(400).json({ message: trungMaVachMessage(trung) });
+    }
+
     const update = { $set: body };
     // maVach rỗng → $unset để không vi phạm sparse unique index
     if ('maVach' in body && !body.maVach) {
@@ -92,16 +113,20 @@ exports.update = async (req, res) => {
 };
 
 // GET /api/hang-hoa/barcode/:maVach — tra cứu nhanh khi bán hàng (scan mã vạch)
-// Ưu tiên tìm trong BienThe.maVach trước (hàng có biến thể), fallback HangHoa.maVach
+// Tìm theo maVach (chính) hoặc dsMaVach (phụ). Ưu tiên BienThe trước (hàng có
+// biến thể), fallback HangHoa.
 exports.getByBarcode = async (req, res) => {
   try {
-    const bt = await BienThe.findOne({ maVach: req.params.maVach, trangThai: 'Hoạt động' });
+    const code = req.params.maVach;
+    const matchCode = { $or: [{ maVach: code }, { dsMaVach: code }] };
+
+    const bt = await BienThe.findOne({ ...matchCode, trangThai: 'Hoạt động' });
     if (bt) {
       const item = await HangHoa.findOne({ maHangHoa: bt.maHangHoa, trangThai: 'Hoạt động' });
       if (!item) return res.status(404).json({ message: 'Không tìm thấy hàng hoá với mã vạch này' });
       return res.json({ ...item.toObject(), bienThe: bt });
     }
-    const item = await HangHoa.findOne({ maVach: req.params.maVach, trangThai: 'Hoạt động' });
+    const item = await HangHoa.findOne({ ...matchCode, trangThai: 'Hoạt động' });
     if (!item) return res.status(404).json({ message: 'Không tìm thấy hàng hoá với mã vạch này' });
     res.json(item);
   } catch (err) {

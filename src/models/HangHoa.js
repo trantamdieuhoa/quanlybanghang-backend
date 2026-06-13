@@ -26,6 +26,11 @@ const hangHoaSchema = new mongoose.Schema({
     trim: true,
     index: { unique: true, sparse: true },
   },
+  // Danh sách mã vạch phụ (ngoài maVach chính) — 1 mặt hàng có thể có nhiều mã
+  // vạch (gói/lốc/thùng...). Trùng lặp toàn hệ thống (HangHoa + BienThe) được
+  // kiểm tra ở controller qua utils/maVachUtils.findTrungMaVach — không enforce
+  // unique ở DB level vì không thể unique cross-collection.
+  dsMaVach: { type: [String], default: [], index: true },
   donViNhoNhat: { type: String, default: '' },
   danhMuc: {
     type: String,

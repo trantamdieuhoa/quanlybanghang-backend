@@ -1,5 +1,6 @@
 const BienThe = require('../models/BienThe');
 const HangHoa = require('../models/HangHoa');
+const { normalizeDsMaVach, collectAllMaVach, findTrungMaVach, trungMaVachMessage } = require('../utils/maVachUtils');
 
 // Đồng bộ HangHoa.tonKho = tổng tonKho của các biến thể — gọi sau mỗi thay đổi BienThe
 // hoặc khi bán/nhập hàng theo biến thể (dùng ở hoaDonController/phieuNhapController)
@@ -39,6 +40,13 @@ exports.create = async (req, res) => {
   try {
     const body = { ...req.body };
     if (!body.maVach) delete body.maVach; // tránh vi phạm sparse unique index
+    if ('dsMaVach' in body) body.dsMaVach = normalizeDsMaVach(body.dsMaVach);
+
+    // 1 mã vạch chỉ thuộc 1 mặt hàng/biến thể — kiểm tra trùng toàn hệ thống
+    const allMaVach = collectAllMaVach(body.maVach, body.dsMaVach);
+    const trung = await findTrungMaVach(allMaVach);
+    if (trung) return res.status(400).json({ message: trungMaVachMessage(trung) });
+
     const item = await BienThe.create(body);
     await exports.syncTonKho(item.maHangHoa);
     res.status(201).json(item);
@@ -55,6 +63,18 @@ exports.create = async (req, res) => {
 exports.update = async (req, res) => {
   try {
     const body = { ...req.body };
+    if ('dsMaVach' in body) body.dsMaVach = normalizeDsMaVach(body.dsMaVach);
+
+    // 1 mã vạch chỉ thuộc 1 mặt hàng/biến thể — kiểm tra trùng toàn hệ thống
+    if ('maVach' in body || 'dsMaVach' in body) {
+      const existing = await BienThe.findOne({ maBienThe: req.params.id }).select('maVach dsMaVach').lean();
+      const maVach = 'maVach' in body ? body.maVach : existing?.maVach;
+      const dsMaVach = 'dsMaVach' in body ? body.dsMaVach : existing?.dsMaVach;
+      const allMaVach = collectAllMaVach(maVach, dsMaVach);
+      const trung = await findTrungMaVach(allMaVach, { excludeMaBienThe: req.params.id });
+      if (trung) return res.status(400).json({ message: trungMaVachMessage(trung) });
+    }
+
     const update = { $set: body };
     if ('maVach' in body && !body.maVach) {
       delete body.maVach;
