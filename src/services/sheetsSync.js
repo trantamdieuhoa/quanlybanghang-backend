@@ -36,6 +36,17 @@ const fromSheets = (val) => Math.round((Number(val) || 0) * 1000);
 // MongoDB lưu đồng → chuyển về nghìn đồng cho Sheets (luôn chia 1000)
 const toSheets = (val) => (Number(val) || 0) / 1000;
 
+// Parse cột "Ngày" trong Sheet (định dạng d/M/yyyy từ formatDate) → Date (00:00) hoặc null
+const parseSheetDate = (s) => {
+  if (!s) return null;
+  const parts = String(s).split('/');
+  if (parts.length !== 3) return null;
+  const [d, m, y] = parts.map(Number);
+  if (!d || !m || !y) return null;
+  const dt = new Date(y, m - 1, d);
+  return Number.isNaN(dt.getTime()) ? null : dt;
+};
+
 const clearAndWrite = async (sheets, sheetId, sheetName, rows) => {
   // Không xoá khi không có dữ liệu — tránh mất sheet khi DB rỗng
   if (rows.length === 0) {
@@ -128,8 +139,20 @@ const importHangHoa = async (sheets, sheetId) => {
 
   const validIds = [];
   for (const row of rows) {
-    const [maHangHoa, tenHangHoa, donViNhoNhat, danhMuc, nhaCungCap, ghiChu, trangThai, , giaVonRaw, coHangRaw] = row;
+    const [maHangHoa, tenHangHoa, donViNhoNhat, danhMuc, nhaCungCap, ghiChu, trangThai, ngayRaw, giaVonRaw, coHangRaw] = row;
     if (!maHangHoa || !tenHangHoa) continue;
+
+    // Nếu hàng hoá đã được SỬA TRONG APP sau lần export gần nhất (ngayCapNhat
+    // trong MongoDB mới hơn cột "Ngày" trong Sheet) → Sheet đang chứa dữ liệu
+    // CŨ → bỏ qua ghi đè để tránh "hoàn tác" chỉnh sửa trong app (vd. đổi tên
+    // hàng hoá xong bị trả về tên cũ sau khi app tự import lại từ Sheets).
+    const existing = await HangHoa.findOne({ maHangHoa }).select('ngayCapNhat').lean();
+    const sheetDate = parseSheetDate(ngayRaw);
+    if (existing?.ngayCapNhat && sheetDate &&
+        new Date(existing.ngayCapNhat).setHours(0, 0, 0, 0) > sheetDate.setHours(0, 0, 0, 0)) {
+      validIds.push(maHangHoa);
+      continue;
+    }
 
     const updateFields = {
       tenHangHoa,
