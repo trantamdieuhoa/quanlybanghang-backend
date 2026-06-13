@@ -21,6 +21,7 @@ const HangHoa = require('../models/HangHoa');
 const BangGia = require('../models/BangGia');
 const DanhMuc = require('../models/DanhMuc');
 const DonViTinh = require('../models/DonViTinh');
+const SyncState = require('../models/SyncState');
 
 // ─── Helper ────────────────────────────────────────────────────────────────────
 
@@ -35,17 +36,6 @@ const fromSheets = (val) => Math.round((Number(val) || 0) * 1000);
 
 // MongoDB lưu đồng → chuyển về nghìn đồng cho Sheets (luôn chia 1000)
 const toSheets = (val) => (Number(val) || 0) / 1000;
-
-// Parse cột "Ngày" trong Sheet (định dạng d/M/yyyy từ formatDate) → Date (00:00) hoặc null
-const parseSheetDate = (s) => {
-  if (!s) return null;
-  const parts = String(s).split('/');
-  if (parts.length !== 3) return null;
-  const [d, m, y] = parts.map(Number);
-  if (!d || !m || !y) return null;
-  const dt = new Date(y, m - 1, d);
-  return Number.isNaN(dt.getTime()) ? null : dt;
-};
 
 const clearAndWrite = async (sheets, sheetId, sheetName, rows) => {
   // Không xoá khi không có dữ liệu — tránh mất sheet khi DB rỗng
@@ -128,7 +118,7 @@ const readSheet = async (sheets, sheetId, sheetName) => {
   return res.data.values || [];
 };
 
-const importHangHoa = async (sheets, sheetId) => {
+const importHangHoa = async (sheets, sheetId, lastExportAt) => {
   const rows = await readSheet(sheets, sheetId, 'HangHoa');
 
   // Guard: sheet rỗng hoặc < 3 dòng → dừng, không xoá MongoDB
@@ -139,17 +129,18 @@ const importHangHoa = async (sheets, sheetId) => {
 
   const validIds = [];
   for (const row of rows) {
-    const [maHangHoa, tenHangHoa, donViNhoNhat, danhMuc, nhaCungCap, ghiChu, trangThai, ngayRaw, giaVonRaw, coHangRaw] = row;
+    const [maHangHoa, tenHangHoa, donViNhoNhat, danhMuc, nhaCungCap, ghiChu, trangThai, , giaVonRaw, coHangRaw] = row;
     if (!maHangHoa || !tenHangHoa) continue;
 
     // Nếu hàng hoá đã được SỬA TRONG APP sau lần export gần nhất (ngayCapNhat
-    // trong MongoDB mới hơn cột "Ngày" trong Sheet) → Sheet đang chứa dữ liệu
-    // CŨ → bỏ qua ghi đè để tránh "hoàn tác" chỉnh sửa trong app (vd. đổi tên
-    // hàng hoá xong bị trả về tên cũ sau khi app tự import lại từ Sheets).
+    // trong MongoDB mới hơn lastExportAt) → Sheet đang chứa dữ liệu CŨ → bỏ
+    // qua ghi đè để tránh "hoàn tác" chỉnh sửa trong app (vd. đổi tên/trạng
+    // thái hàng hoá xong bị trả về giá trị cũ sau khi app tự import lại).
+    // lastExportAt = null (chưa export lần nào) → coi mọi hàng hoá đã có
+    // trong MongoDB là "mới hơn" → bỏ qua ghi đè cho đến khi export chạy lần đầu.
     const existing = await HangHoa.findOne({ maHangHoa }).select('ngayCapNhat').lean();
-    const sheetDate = parseSheetDate(ngayRaw);
-    if (existing?.ngayCapNhat && sheetDate &&
-        new Date(existing.ngayCapNhat).setHours(0, 0, 0, 0) > sheetDate.setHours(0, 0, 0, 0)) {
+    if (existing?.ngayCapNhat &&
+        (!lastExportAt || new Date(existing.ngayCapNhat) > lastExportAt)) {
       validIds.push(maHangHoa);
       continue;
     }
@@ -273,6 +264,13 @@ const syncAll = async () => {
     exportDanhMuc(sheets, sheetId),
     exportDonViTinh(sheets, sheetId),
   ]);
+  // Ghi nhận thời điểm export thành công — importHangHoa dùng để biết hàng
+  // hoá nào đã bị sửa trong app SAU lần export này (Sheet đang stale với hàng đó).
+  await SyncState.findOneAndUpdate(
+    { key: 'main' },
+    { lastExportAt: new Date() },
+    { upsert: true }
+  );
   console.log(`[Sheets Sync] Exported: HangHoa=${hangHoa}, BangGia=${bangGia}, DanhMuc=${danhMuc}, DonViTinh=${donViTinh}`);
   return { hangHoa, bangGia, danhMuc, donViTinh };
 };
@@ -281,10 +279,12 @@ const importFromSheets = async () => {
   const sheets = getSheets();
   const sheetId = SHEET_ID();
   if (!sheetId) throw new Error('GOOGLE_SHEET_ID chưa được cấu hình trong .env');
+  const syncState = await SyncState.findOne({ key: 'main' }).lean();
+  const lastExportAt = syncState?.lastExportAt ? new Date(syncState.lastExportAt) : null;
   const [danhMuc, donViTinh, hangHoa, bangGia] = await Promise.all([
     importDanhMuc(sheets, sheetId),
     importDonViTinh(sheets, sheetId),
-    importHangHoa(sheets, sheetId),
+    importHangHoa(sheets, sheetId, lastExportAt),
     importBangGia(sheets, sheetId),
   ]);
   console.log(`[Sheets Import] Imported: DanhMuc=${danhMuc}, DonViTinh=${donViTinh}, HangHoa=${hangHoa}, BangGia=${bangGia}`);
