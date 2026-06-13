@@ -198,7 +198,7 @@ const importBangGia = async (sheets, sheetId) => {
   return validIds.length;
 };
 
-const importDanhMuc = async (sheets, sheetId) => {
+const importDanhMuc = async (sheets, sheetId, lastExportAt) => {
   const rows = await readSheet(sheets, sheetId, 'DanhMuc');
 
   // Guard: sheet rỗng → dừng, không xoá MongoDB
@@ -211,6 +211,17 @@ const importDanhMuc = async (sheets, sheetId) => {
   for (const row of rows) {
     const [maDanhMuc, tenDanhMuc, moTa] = row;
     if (!maDanhMuc || !tenDanhMuc) continue;
+
+    // Nếu danh mục đã được SỬA TRONG APP (vd. đổi tên) sau lần export gần nhất
+    // (updatedAt > lastExportAt) → Sheet đang chứa tên CŨ → bỏ qua ghi đè để
+    // tránh "hoàn tác" việc đổi tên danh mục khi app tự import lại.
+    const existing = await DanhMuc.findOne({ maDanhMuc }).select('updatedAt').lean();
+    if (existing?.updatedAt &&
+        (!lastExportAt || new Date(existing.updatedAt) > lastExportAt)) {
+      validIds.push(maDanhMuc);
+      continue;
+    }
+
     await DanhMuc.findOneAndUpdate(
       { maDanhMuc },
       { tenDanhMuc, moTa: moTa || '' },
@@ -282,7 +293,7 @@ const importFromSheets = async () => {
   const syncState = await SyncState.findOne({ key: 'main' }).lean();
   const lastExportAt = syncState?.lastExportAt ? new Date(syncState.lastExportAt) : null;
   const [danhMuc, donViTinh, hangHoa, bangGia] = await Promise.all([
-    importDanhMuc(sheets, sheetId),
+    importDanhMuc(sheets, sheetId, lastExportAt),
     importDonViTinh(sheets, sheetId),
     importHangHoa(sheets, sheetId, lastExportAt),
     importBangGia(sheets, sheetId),
