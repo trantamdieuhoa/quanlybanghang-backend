@@ -76,24 +76,13 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ message: err.message || 'Internal Server Error' });
 });
 
-const sheetsSync = require('./services/sheetsSync');
-
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', async () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log('Server running on port ' + PORT);
   console.log('Environment: ' + process.env.NODE_ENV);
-  if (process.env.GOOGLE_SHEET_ID && process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL) {
-    try {
-      const result = await sheetsSync.importFromSheets();
-      console.log('[Sheets] Import OK:', result);
-    } catch (err) {
-      console.warn('[Sheets] Auto-import skipped:', err.message);
-    }
-    // Auto-sync cron đã TẮT — chỉ sync thủ công hoặc khi mở/tắt app
-    // sheetsSync.startAutoSync();
-  } else {
-    console.log('[Sheets] Google Sheets not configured, skipping sync');
-  }
+  // App (MongoDB) là nguồn dữ liệu chính — không auto-import từ Sheets khi
+  // server start. Sync Sheets chỉ chạy thủ công (Settings) hoặc auto-export
+  // App → Sheets khi đóng app (xem flutter_new/lib/main.dart).
 });
 
 module.exports = app;
