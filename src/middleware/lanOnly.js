@@ -15,7 +15,12 @@ const lanOnly = (req, res, next) => {
   // Chuẩn hoá IPv6 loopback
   const normalizedIp = ip === '::1' ? '127.0.0.1' : ip.replace('::ffff:', '');
 
-  if (normalizedIp === '127.0.0.1' || normalizedIp.startsWith(subnet)) {
+  // So khớp theo octet (tránh "192.168.1" match nhầm "192.168.10.x"/"192.168.100.x")
+  const normalizedSubnet = subnet.replace(/\.$/, '');
+  const isInSubnet =
+    normalizedIp === normalizedSubnet || normalizedIp.startsWith(`${normalizedSubnet}.`);
+
+  if (normalizedIp === '127.0.0.1' || isInSubnet) {
     return next();
   }
 

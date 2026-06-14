@@ -3,6 +3,7 @@ const HangHoa = require('../models/HangHoa');
 const BangGia = require('../models/BangGia');
 const DanhMuc = require('../models/DanhMuc');
 const DonViTinh = require('../models/DonViTinh');
+const { removeDiacritics } = require('../utils/searchUtils');
 
 /**
  * POST /api/import/excel
@@ -61,6 +62,8 @@ exports.importExcel = async (req, res) => {
             { maHangHoa: String(maHangHoa).trim() },
             {
               tenHangHoa: String(tenHangHoa).trim(),
+              // findOneAndUpdate không chạy pre('save') — tự tính tenKhongDau để search hoạt động
+              tenKhongDau: removeDiacritics(String(tenHangHoa).trim()),
               donViNhoNhat: String(donViNhoNhat || '').trim(),
               danhMuc: String(danhMuc || '').trim(),
               ghiChu: String(ghiChu || '').trim(),

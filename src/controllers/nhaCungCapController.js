@@ -1,15 +1,16 @@
 const NhaCungCap = require('../models/NhaCungCap');
+const { removeDiacritics, buildSearchFilter, escapeRegex } = require('../utils/searchUtils');
 
 exports.getAll = async (req, res) => {
   try {
     const { search = '', all = '' } = req.query;
     // all=1: trả tất cả (kể cả Ngừng) — dùng cho form chọn NCC của hàng hoá
     const filter = all === '1' ? {} : { trangThai: 'Hoạt động' };
-    if (search) filter.$or = [
-      { tenNhaCungCap: { $regex: search, $options: 'i' } },
-      { tenNCC:        { $regex: search, $options: 'i' } },
-      { soDienThoai:   { $regex: search, $options: 'i' } },
-    ];
+    if (search) {
+      const tenFilter = buildSearchFilter(search, ['tenKhongDau']);
+      const sdtFilter = { soDienThoai: { $regex: escapeRegex(search), $options: 'i' } };
+      filter.$or = [sdtFilter, ...(tenFilter ? [tenFilter] : [])];
+    }
     const data = await NhaCungCap.find(filter).sort({ tenNCC: 1 });
     res.json(data);
   } catch (err) {
@@ -33,9 +34,16 @@ exports.create = async (req, res) => {
 
 exports.update = async (req, res) => {
   try {
+    const body = { ...req.body };
+    // Không cho client tự gửi tenKhongDau — luôn tính lại từ tenNhaCungCap/tenNCC
+    delete body.tenKhongDau;
+    // findOneAndUpdate không chạy pre('save') — tự tính lại tenKhongDau khi đổi tên
+    if ('tenNhaCungCap' in body || 'tenNCC' in body) {
+      body.tenKhongDau = removeDiacritics(body.tenNhaCungCap || body.tenNCC);
+    }
     const item = await NhaCungCap.findOneAndUpdate(
-      { maNCC: req.params.id },
-      req.body,
+      { maNhaCungCap: req.params.id },
+      body,
       { new: true, runValidators: true }
     );
     if (!item) return res.status(404).json({ message: 'Không tìm thấy nhà cung cấp' });
@@ -48,7 +56,7 @@ exports.update = async (req, res) => {
 exports.remove = async (req, res) => {
   try {
     const item = await NhaCungCap.findOneAndUpdate(
-      { maNCC: req.params.id },
+      { maNhaCungCap: req.params.id },
       { trangThai: 'Ngừng' },
       { new: true }
     );

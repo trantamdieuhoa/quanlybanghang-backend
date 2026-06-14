@@ -6,7 +6,7 @@ router.use(protect);
 router.get('/', ctrl.getAll); // ?maHangHoa=
 router.get('/:id', ctrl.getOne);
 router.post('/', requirePermission('quan_ly_hang_hoa'), ctrl.create);
-router.put('/:id', ctrl.update);
+router.put('/:id', requirePermission('quan_ly_hang_hoa'), ctrl.update);
 router.delete('/:id', requirePermission('quan_ly_hang_hoa'), ctrl.remove);
 
 module.exports = router;

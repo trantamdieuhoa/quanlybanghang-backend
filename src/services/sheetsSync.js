@@ -22,6 +22,7 @@ const BangGia = require('../models/BangGia');
 const DanhMuc = require('../models/DanhMuc');
 const DonViTinh = require('../models/DonViTinh');
 const SyncState = require('../models/SyncState');
+const { removeDiacritics } = require('../utils/searchUtils');
 
 // ─── Helper ────────────────────────────────────────────────────────────────────
 
@@ -147,6 +148,8 @@ const importHangHoa = async (sheets, sheetId, lastExportAt) => {
 
     const updateFields = {
       tenHangHoa,
+      // findOneAndUpdate không chạy pre('save') — tự tính tenKhongDau để search hoạt động
+      tenKhongDau: removeDiacritics(tenHangHoa),
       donViNhoNhat: donViNhoNhat || '',
       danhMuc: danhMuc || '',
       ghiChu: ghiChu || '',
@@ -176,18 +179,33 @@ const importHangHoa = async (sheets, sheetId, lastExportAt) => {
   return validIds.length;
 };
 
-const importBangGia = async (sheets, sheetId) => {
+const importBangGia = async (sheets, sheetId, lastExportAt) => {
   const rows = await readSheet(sheets, sheetId, 'BangGiaChiTiet');
   const validIds = [];
   for (const row of rows) {
     const [maGia, maHangHoa, tenHangHoa, quyCachBan, soLuongQuyDoi, donViQuyCach, giaBanRaw, , ghiChu, trangThai] = row;
     if (!maGia || !maHangHoa) continue;
+
+    // Nếu bảng giá đã được SỬA TRONG APP (vd. đổi giá bán) sau lần export gần
+    // nhất (updatedAt > lastExportAt) → Sheet đang chứa giá CŨ → bỏ qua ghi đè
+    // để tránh "hoàn tác" việc sửa giá khi app tự import lại (giống importHangHoa/importDanhMuc).
+    const existing = await BangGia.findOne({ maGia }).select('updatedAt').lean();
+    if (existing?.updatedAt &&
+        (!lastExportAt || new Date(existing.updatedAt) > lastExportAt)) {
+      validIds.push(maGia);
+      continue;
+    }
+
+    const giaBan = fromSheets(giaBanRaw);
+    const soLuong = Number(soLuongQuyDoi) || 1;
     await BangGia.findOneAndUpdate(
       { maGia },
       {
         maHangHoa, tenHangHoa, quyCachBan, donViQuyCach, ghiChu,
-        soLuongQuyDoi: Number(soLuongQuyDoi) || 1,
-        giaBan: fromSheets(giaBanRaw),
+        soLuongQuyDoi: soLuong,
+        giaBan,
+        // findOneAndUpdate không chạy pre('save') — tự tính lại giaTrenDonViNhoNhat
+        giaTrenDonViNhoNhat: soLuong > 0 ? giaBan / soLuong : 0,
         trangThai: trangThai || 'Hoạt động',
       },
       { upsert: true, new: true }
@@ -296,7 +314,7 @@ const importFromSheets = async () => {
     importDanhMuc(sheets, sheetId, lastExportAt),
     importDonViTinh(sheets, sheetId),
     importHangHoa(sheets, sheetId, lastExportAt),
-    importBangGia(sheets, sheetId),
+    importBangGia(sheets, sheetId, lastExportAt),
   ]);
   console.log(`[Sheets Import] Imported: DanhMuc=${danhMuc}, DonViTinh=${donViTinh}, HangHoa=${hangHoa}, BangGia=${bangGia}`);
   return { danhMuc, donViTinh, hangHoa, bangGia };

@@ -1,13 +1,15 @@
 const KhachHang = require('../models/KhachHang');
+const { removeDiacritics, buildSearchFilter, escapeRegex } = require('../utils/searchUtils');
 
 exports.getAll = async (req, res) => {
   try {
     const { search = '', trangThai, page = 1, limit = 50 } = req.query;
     const filter = {};
-    if (search) filter.$or = [
-      { tenKhachHang: new RegExp(search, 'i') },
-      { soDienThoai:  new RegExp(search, 'i') },
-    ];
+    if (search) {
+      const tenFilter = buildSearchFilter(search, ['tenKhongDau']);
+      const sdtFilter = { soDienThoai: { $regex: escapeRegex(search), $options: 'i' } };
+      filter.$or = [sdtFilter, ...(tenFilter ? [tenFilter] : [])];
+    }
     if (trangThai) filter.trangThai = trangThai;
     const skip = (page - 1) * limit;
     const [data, total] = await Promise.all([
@@ -36,9 +38,14 @@ exports.create = async (req, res) => {
 
 exports.update = async (req, res) => {
   try {
+    const body = { ...req.body };
+    // Không cho client tự gửi tenKhongDau — luôn tính lại từ tenKhachHang
+    delete body.tenKhongDau;
+    // findOneAndUpdate không chạy pre('save') — tự tính lại tenKhongDau khi đổi tên
+    if ('tenKhachHang' in body) body.tenKhongDau = removeDiacritics(body.tenKhachHang);
     const kh = await KhachHang.findOneAndUpdate(
       { maKhachHang: req.params.id },
-      req.body,
+      body,
       { new: true }
     );
     if (!kh) return res.status(404).json({ message: 'Khong tim thay khach hang' });

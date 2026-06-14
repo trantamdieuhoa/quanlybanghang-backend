@@ -2,10 +2,11 @@ const BienThe = require('../models/BienThe');
 const HangHoa = require('../models/HangHoa');
 const { normalizeDsMaVach, collectAllMaVach, findTrungMaVach, trungMaVachMessage } = require('../utils/maVachUtils');
 
-// Đồng bộ HangHoa.tonKho = tổng tonKho của các biến thể — gọi sau mỗi thay đổi BienThe
-// hoặc khi bán/nhập hàng theo biến thể (dùng ở hoaDonController/phieuNhapController)
+// Đồng bộ HangHoa.tonKho = tổng tonKho của các biến thể đang "Hoạt động" — gọi
+// sau mỗi thay đổi BienThe hoặc khi bán/nhập hàng theo biến thể (dùng ở
+// hoaDonController/phieuNhapController). Biến thể "Ngừng" không tính vào tổng.
 exports.syncTonKho = async (maHangHoa) => {
-  const list = await BienThe.find({ maHangHoa }).select('tonKho');
+  const list = await BienThe.find({ maHangHoa, trangThai: 'Hoạt động' }).select('tonKho');
   const tongTonKho = list.reduce((sum, bt) => sum + (bt.tonKho || 0), 0);
   await HangHoa.findOneAndUpdate({ maHangHoa }, { tonKho: tongTonKho });
   return tongTonKho;
@@ -106,6 +107,8 @@ exports.remove = async (req, res) => {
       { new: true }
     );
     if (!item) return res.status(404).json({ message: 'Không tìm thấy biến thể' });
+    // Biến thể "Ngừng" không còn được tính vào tồn kho tổng của HangHoa
+    await exports.syncTonKho(item.maHangHoa);
     res.json({ message: 'Đã ngừng biến thể', item });
   } catch (err) {
     res.status(500).json({ message: err.message });

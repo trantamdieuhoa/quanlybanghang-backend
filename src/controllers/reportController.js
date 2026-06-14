@@ -124,7 +124,7 @@ exports.daily = async (req, res) => {
 
     const [hoaDons, phieuNhaps, thuChis, khachMoi] = await Promise.all([
       HoaDon.find({ ngayBan: { $gte: start, $lte: end }, trangThai: HD })
-        .select('tenKhachHang tongTien daThanhToan conNo trangThaiTT chiTiet')
+        .select('tenKhachHang tongTien tongThanhToan daThanhToan conNo trangThaiTT chiTiet')
         .lean(),
       PhieuNhap.find({ ngayNhap: { $gte: start, $lte: end } })
         .select('tongTien').lean(),
@@ -133,7 +133,8 @@ exports.daily = async (req, res) => {
       KhachHang.countDocuments({ createdAt: { $gte: start, $lte: end } }),
     ]);
 
-    const doanhThu   = hoaDons.reduce((s, h) => s + (h.tongTien || 0), 0);
+    // Doanh thu = tongThanhToan (số tiền thực thu sau giảm giá) — đồng bộ với dashboard/weekly
+    const doanhThu   = hoaDons.reduce((s, h) => s + (h.tongThanhToan || 0), 0);
     const daThu      = hoaDons.reduce((s, h) => s + (h.daThanhToan || 0), 0);
     const conNo      = hoaDons.reduce((s, h) => s + (h.conNo || 0), 0);
     const nhapHang   = phieuNhaps.reduce((s, p) => s + (p.tongTien || 0), 0);
@@ -167,14 +168,15 @@ exports.monthly = async (req, res) => {
 
     const [hoaDons, phieuNhaps, khachMoi] = await Promise.all([
       HoaDon.find({ ngayBan: { $gte: start, $lte: end }, trangThai: HD })
-        .select('tongTien daThanhToan conNo ngayBan chiTiet')
+        .select('tongTien tongThanhToan daThanhToan conNo ngayBan chiTiet')
         .lean(),
       PhieuNhap.find({ ngayNhap: { $gte: start, $lte: end } })
         .select('tongTien').lean(),
       KhachHang.countDocuments({ createdAt: { $gte: start, $lte: end } }),
     ]);
 
-    const doanhThu    = hoaDons.reduce((s, h) => s + (h.tongTien || 0), 0);
+    // Doanh thu = tongThanhToan (số tiền thực thu sau giảm giá) — đồng bộ với dashboard/weekly
+    const doanhThu    = hoaDons.reduce((s, h) => s + (h.tongThanhToan || 0), 0);
     const daThu       = hoaDons.reduce((s, h) => s + (h.daThanhToan || 0), 0);
     const conNo       = hoaDons.reduce((s, h) => s + (h.conNo || 0), 0);
     const nhapHang    = phieuNhaps.reduce((s, p) => s + (p.tongTien || 0), 0);
@@ -188,7 +190,7 @@ exports.monthly = async (req, res) => {
         ? new Date(h.ngayBan).toISOString().slice(0, 10)
         : '';
       if (!d) continue;
-      dayMap[d] = (dayMap[d] || 0) + (h.tongTien || 0);
+      dayMap[d] = (dayMap[d] || 0) + (h.tongThanhToan || 0);
     }
     const byDay = Object.entries(dayMap)
       .sort(([a], [b]) => a.localeCompare(b))

@@ -1,4 +1,5 @@
 const KhuyenMai = require('../models/KhuyenMai');
+const { buildSearchFilter } = require('../utils/searchUtils');
 
 // GET /api/khuyen-mai?page=1&limit=50&trangThai=&search=
 exports.getAll = async (req, res) => {
@@ -6,7 +7,10 @@ exports.getAll = async (req, res) => {
     const { page = 1, limit = 50, trangThai = '', search = '' } = req.query;
     const filter = {};
     if (trangThai) filter.trangThai = trangThai;
-    if (search) filter.ten = { $regex: search, $options: 'i' };
+    if (search) {
+      const tenFilter = buildSearchFilter(search, ['tenKhongDau']);
+      if (tenFilter) Object.assign(filter, tenFilter);
+    }
 
     const [data, total] = await Promise.all([
       KhuyenMai.find(filter)

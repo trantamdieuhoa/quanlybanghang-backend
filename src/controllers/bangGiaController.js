@@ -40,12 +40,12 @@ exports.create = async (req, res) => {
 // PUT /api/bang-gia/:maGia
 exports.update = async (req, res) => {
   try {
-    const item = await BangGia.findOneAndUpdate(
-      { maGia: req.params.maGia },
-      req.body,
-      { new: true, runValidators: true }
-    );
+    // Dùng findOne + save() (không findOneAndUpdate) để pre('save') tự tính lại
+    // giaTrenDonViNhoNhat = giaBan / soLuongQuyDoi khi đổi giaBan hoặc soLuongQuyDoi
+    const item = await BangGia.findOne({ maGia: req.params.maGia });
     if (!item) return res.status(404).json({ message: 'Không tìm thấy bảng giá' });
+    Object.assign(item, req.body);
+    await item.save();
     res.json(item);
   } catch (err) {
     res.status(500).json({ message: err.message });

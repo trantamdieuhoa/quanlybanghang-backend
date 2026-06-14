@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { removeDiacritics } = require('../utils/searchUtils');
 
 // Lô hàng theo hạn sử dụng — chỉ dùng để theo dõi/cảnh báo HSD,
 // KHÔNG ảnh hưởng đến luồng trừ/hoàn tonKho hiện có (bán hàng vẫn dùng HangHoa.tonKho tổng)
@@ -19,6 +20,9 @@ const hangHoaSchema = new mongoose.Schema({
     // Format: HH + random 8 chars (ví dụ: HHMPCGWJAL)
   },
   tenHangHoa: { type: String, required: true, trim: true },
+  // Tên không dấu + lowercase, tự tính trong pre('save') — dùng để tìm kiếm
+  // không phân biệt dấu tiếng Việt (xem utils/searchUtils.js)
+  tenKhongDau: { type: String, default: '', index: true },
   // Không set default '' — để field "absent" khi chưa nhập, tránh vi phạm
   // unique index (sparse chỉ bỏ qua field absent/null, không bỏ qua chuỗi rỗng)
   maVach: {
@@ -61,6 +65,14 @@ hangHoaSchema.pre('validate', function (next) {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     const rand = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
     this.maHangHoa = `HH${rand}`;
+  }
+  next();
+});
+
+// Tự tính tenKhongDau mỗi khi tenHangHoa thay đổi — dùng cho search không dấu
+hangHoaSchema.pre('save', function (next) {
+  if (this.isModified('tenHangHoa') || !this.tenKhongDau) {
+    this.tenKhongDau = removeDiacritics(this.tenHangHoa);
   }
   next();
 });

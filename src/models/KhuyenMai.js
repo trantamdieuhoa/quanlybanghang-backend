@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { removeDiacritics } = require('../utils/searchUtils');
 
 const khuyenMaiSchema = new mongoose.Schema({
   maKhuyenMai: {
@@ -6,6 +7,7 @@ const khuyenMaiSchema = new mongoose.Schema({
     default: () => 'KM' + Date.now().toString(36).toUpperCase(),
   },
   ten:  { type: String, required: true, trim: true },
+  tenKhongDau: { type: String, default: '', index: true },
   moTa: { type: String, default: '' },
 
   // PhanTram: giảm % | SoTien: giảm số tiền cố định | TangKem: tặng kèm sản phẩm
@@ -51,6 +53,13 @@ khuyenMaiSchema.pre('validate', function (next) {
   }
   if (this.ngayBatDau && this.ngayKetThuc && this.ngayBatDau > this.ngayKetThuc) {
     return next(new Error('Ngày bắt đầu phải trước ngày kết thúc'));
+  }
+  next();
+});
+
+khuyenMaiSchema.pre('save', function (next) {
+  if (this.isModified('ten') || !this.tenKhongDau) {
+    this.tenKhongDau = removeDiacritics(this.ten);
   }
   next();
 });

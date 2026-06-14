@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { removeDiacritics } = require('../utils/searchUtils');
 
 const nhaCungCapSchema = new mongoose.Schema({
   maNhaCungCap: { type: String, unique: true, trim: true,
@@ -7,6 +8,7 @@ const nhaCungCapSchema = new mongoose.Schema({
   maNCC:       { type: String, trim: true },
   tenNhaCungCap:{ type: String, required: true, trim: true },
   tenNCC:      { type: String, trim: true },  // alias cũ
+  tenKhongDau: { type: String, default: '', index: true },
   soDienThoai: { type: String, default: '' },
   diaChi:      { type: String, default: '' },
   email:       { type: String, default: '' },
@@ -28,6 +30,13 @@ nhaCungCapSchema.pre('validate', function(next) {
   if (!this.maNCC && this.maNhaCungCap) this.maNCC = this.maNhaCungCap;
   if (!this.tenNhaCungCap && this.tenNCC) this.tenNhaCungCap = this.tenNCC;
   if (!this.tenNCC && this.tenNhaCungCap) this.tenNCC = this.tenNhaCungCap;
+  next();
+});
+
+nhaCungCapSchema.pre('save', function (next) {
+  if (this.isModified('tenNhaCungCap') || this.isModified('tenNCC') || !this.tenKhongDau) {
+    this.tenKhongDau = removeDiacritics(this.tenNhaCungCap);
+  }
   next();
 });
 

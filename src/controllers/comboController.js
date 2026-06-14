@@ -1,5 +1,6 @@
 const Combo = require('../models/Combo');
 const HangHoa = require('../models/HangHoa');
+const { buildSearchFilter } = require('../utils/searchUtils');
 
 // GET /api/combo?page=1&limit=50&trangThai=&search=
 exports.getAll = async (req, res) => {
@@ -7,7 +8,10 @@ exports.getAll = async (req, res) => {
     const { page = 1, limit = 50, trangThai = '', search = '' } = req.query;
     const filter = {};
     if (trangThai) filter.trangThai = trangThai;
-    if (search) filter.tenCombo = { $regex: search, $options: 'i' };
+    if (search) {
+      const tenFilter = buildSearchFilter(search, ['tenKhongDau']);
+      if (tenFilter) Object.assign(filter, tenFilter);
+    }
 
     const [data, total] = await Promise.all([
       Combo.find(filter)

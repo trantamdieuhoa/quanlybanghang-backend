@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { removeDiacritics } = require('../utils/searchUtils');
 
 const ThanhPhanSchema = new mongoose.Schema({
   maHangHoa:  { type: String, required: true },
@@ -13,6 +14,7 @@ const comboSchema = new mongoose.Schema({
     default: () => 'CB' + Date.now().toString(36).toUpperCase(),
   },
   tenCombo: { type: String, required: true, trim: true },
+  tenKhongDau: { type: String, default: '', index: true },
   moTa:     { type: String, default: '' },
   thanhPhan: { type: [ThanhPhanSchema], default: [] },
   giaBan:   { type: Number, required: true, min: 0 },
@@ -27,6 +29,13 @@ const comboSchema = new mongoose.Schema({
 comboSchema.pre('validate', function (next) {
   if (!this.thanhPhan || this.thanhPhan.length === 0) {
     return next(new Error('Combo cần ít nhất 1 sản phẩm thành phần'));
+  }
+  next();
+});
+
+comboSchema.pre('save', function (next) {
+  if (this.isModified('tenCombo') || !this.tenKhongDau) {
+    this.tenKhongDau = removeDiacritics(this.tenCombo);
   }
   next();
 });
